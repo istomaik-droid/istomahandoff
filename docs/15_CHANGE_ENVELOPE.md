@@ -1,0 +1,53 @@
+# 15. Change envelope
+
+```yaml
+schemaVersion: 2
+ownerDecision: DEC-XXXX
+workItem: FEAT-123
+riskClass: R2
+protocolLevel: P0 | P1 | P2        # смешанный scope — высший
+predecessor:
+  state: RESULT_OWNER_ACCEPTED
+  receiptSha256: <sha256>
+rollbackAnchor:
+  state: VERIFIED
+  type: GIT_TAG | DB_SNAPSHOT | INFRA_SNAPSHOT | ARCHIVE
+  sha256: <sha256>
+scope:
+  workspace: <one allowed root>
+  data: SYNTHETIC_ONLY | ANONYMIZED | PRODUCTION_READONLY
+  budget: ZERO_SPEND | <limit>
+allowedPaths:
+  - src/<bounded-area>
+  - tests/<bounded-area>
+  - docs/<bounded-area>
+allowedEffects:
+  - LOCAL_LOOPBACK
+  - CI_PIPELINE
+forbiddenEffects:
+  - PRODUCTION_DATA
+  - EXTERNAL_NETWORK
+  - PROVIDER_SELECTION
+  - SPEND
+  - PILOT
+  - PRODUCTION
+  - DEPLOYMENT
+requiredTests:
+  - LINT
+  - TYPECHECK
+  - UNIT
+  - INTEGRATION
+  - E2E
+  - SAST
+  - DEPENDENCY_SCAN
+  - SECRET_SCAN
+  - SBOM
+  - REPRODUCIBLE_BUILD
+nextWorkItem:
+  automaticallyOpened: false
+```
+
+Envelope не заменяет решение владельца — материализует его.
+
+Состав тестов по уровням — docs/30 (P0: LINT/TYPECHECK/UNIT; P1: матрица
+без fault/isolation; P2: полная матрица + review-evidence).

@@ -1,0 +1,75 @@
+projectProfile:
+  name: <PROJECT_NAME>
+  owner: <OWNER_NAME>
+  protocol:
+    version: "2.2"
+    defaultLevel: P1              # P0 | P1 | P2 по умолчанию
+    perClassLevel:                # опциональные переопределения
+      R0: P0
+      R4: P2
+  enforcement:
+    environmentLevel: E1          # фактический уровень среды (docs/44)
+    minPerClass:
+      R0: E0
+      R1: E0
+      R2: E1
+      R3: E1
+      R4: E2
+      R5: E3
+  ownerDeputy:
+    - name: <NAME>
+      mandateRef: <MANDATE-XXXX | null>
+  samplingAuditor: <NAME | null>
+  auditIntervalDays: 7
+  workspaceRoot: <PATH>
+  branching: trunk-based | gitflow
+  protectedBranches:
+    - main
+    - release/*
+  commitSigning: required | optional
+  ciProvider: <PROVIDER>
+  requiredGates:
+    - lint
+    - typecheck
+    - unit
+    - integration
+    - e2e
+    - sast
+    - dependency-scan
+    - secret-scan
+    - license-scan
+    - sbom
+    - reproducible-build
+  environments:
+    - name: local
+      data: synthetic
+    - name: staging
+      data: anonymized
+    - name: production
+      data: real
+  dataClasses:
+    - public
+    - internal
+    - confidential
+    - restricted
+  retentionPolicy: <POLICY>
+  backupStrategy: 3-2-1
+  rpo: <RPO>
+  rto: <RTO>
+  observability:
+    logs: <STACK>
+    metrics: <STACK>
+    traces: <STACK>
+  secretsManagement: <STACK>
+  aiAgent:
+    toolAllowlist: []
+    networkPolicy: deny-by-default
+    spendCap: <LIMIT>
+    humanInTheLoopFor: [destructive, irreversible, high-impact]
+  protocolMapping:
+    # для каждого применимого правила протокола — проектная конкретика;
+    # прецедент проекта важнее generic-формулировки
+    verify_command: <COMMAND>      # одна команда проверки после правок
+    staging_env: <ENV>             # безопасная среда для мутирующих тестов/миграций
+    journal_file: <PATH>           # файл журнала работы агента
+    deploy_command: <COMMAND>      # команда деплоя/перезапуска
