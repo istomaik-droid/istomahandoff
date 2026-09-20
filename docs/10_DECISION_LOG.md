@@ -184,6 +184,27 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0008
+  date: 2026-09-20
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/, .github/workflows/, docs/42
+  decision: Владелец утвердил расширение MCP-сервера enforcement-tools
+    и CI: checkpoint_create (git tag с readback, норма docs/19),
+    pre_deploy_check (чистое дерево, гейт docs/38), GitHub Actions
+    workflow (protocol_lint + smoke-тест сервера на каждый push).
+  allowed:
+    - новые tools в mcp_server/server.py
+    - .github/workflows/
+    - строка в docs/42
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

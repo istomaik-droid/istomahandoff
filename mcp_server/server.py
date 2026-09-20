@@ -390,5 +390,68 @@ def protocol_version() -> dict:
             "source": "docs/42_MAINTENANCE.md"}
 
 
+def _git(args: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+        # DEVNULL: иначе дочерний процесс наследует stdin-канал MCP и
+        # subprocess.run зависает (Windows)
+        stdin=subprocess.DEVNULL,
+    )
+
+
+@mcp.tool()
+def checkpoint_create(label: str = "") -> dict:
+    """Git-tag checkpoint/<YYYYMMDD-HHMMSS>[-label] с readback (docs/19)."""
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tag = f"checkpoint/{stamp}"
+    if label:
+        safe = re.sub(r"[^a-z0-9-]+", "-", label.lower()).strip("-")
+        if not safe:
+            raise ValueError(f"label после sanitize пуст: {label!r} "
+                             "(допустимо [a-z0-9-])")
+        tag += f"-{safe}"
+
+    proc = _git(["tag", tag])
+    if proc.returncode != 0:
+        raise ValueError(f"git tag {tag} не создан: {proc.stderr.strip()}")
+
+    # readback: перечитать tag и сверить с HEAD
+    head = _git(["rev-parse", "HEAD"]).stdout.strip()
+    back = _git(["rev-parse", tag]).stdout.strip()
+    verified = bool(head) and head == back
+    result = {"tag": tag, "sha": back, "verified": verified}
+    if not verified:
+        result["note"] = (f"READBACK НЕ СОШЁЛСЯ: HEAD={head}, "
+                          f"tag={back} — checkpoint не считается созданным")
+    return result
+
+
+@mcp.tool()
+def pre_deploy_check(own_files: list[str] | None = None) -> dict:
+    """Pre-deploy gate чистого дерева (docs/38): задеплоенное = закоммиченное."""
+    own = {p.replace("\\", "/") for p in (own_files or [])}
+    proc = _git(["status", "--porcelain"])
+    if proc.returncode != 0:
+        raise ValueError(f"git status не выполнен: {proc.stderr.strip()}")
+    changed = [line[3:].strip() for line in proc.stdout.splitlines() if line]
+    foreign = [p for p in changed if p not in own]
+    if not changed:
+        verdict = "CLEAN"
+    elif not foreign:
+        verdict = "DIRTY_OWN"
+    else:
+        verdict = "DIRTY_FOREIGN"
+    note = {
+        "CLEAN": "дерево чисто: задеплоенное = закоммиченное (docs/38)",
+        "DIRTY_OWN": "незакоммичены только свои файлы: деплой запрещён до "
+                     "коммита — задеплоенное = закоммиченное (docs/38)",
+        "DIRTY_FOREIGN": "STOP (docs/38): в дереве файлы не из own_files — "
+                         "чужие незакоммиченные изменения, деплой запрещён",
+    }[verdict]
+    return {"verdict": verdict, "changed": changed, "foreign": foreign,
+            "note": note}
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
