@@ -71,7 +71,7 @@
 - enforcement level: <E0–E3> — фактический, заявленный средой;
 - последнее решение: <DEC>;
 - accepted predecessor: <state>;
-- rollback anchor: <verified/not verified>;
+- rollback anchor: <VERIFIED | NOT_VERIFIED | MISSING>;
 - active scope: <scope>;
 - forbidden scope: <scope>;
 - data boundary: <boundary>;
