@@ -158,6 +158,32 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0007
+  date: 2026-09-19
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/, .mcp.json.example, agents/AGENT_RUNTIMES.md, README.md, docs/42
+  decision: Владелец утвердил сборку MCP-сервера протокола: resources
+    (канон docs/agents), prompts (5 скиллов), tools — protocol_lint,
+    record_decision (валидация схемы, автоназначение DEC-ID, отказ
+    ACCEPTANCE/RELEASE без evidenceReadHash), get_active_state,
+    evidence_hash, validate_transition (по docs/16), list_expired
+    (просроченные решения/мандаты), audit_sample (docs/46),
+    protocol_version. Enforcement для добросовестного пути (E1–E2),
+    не защита от adversarial (docs/44).
+  allowed:
+    - новый сервер в mcp_server/
+    - пример конфигурации .mcp.json.example
+    - строки в README, AGENT_RUNTIMES, docs/42
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+    - дублирование норм протокола в коде (сервер читает канон из docs/)
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

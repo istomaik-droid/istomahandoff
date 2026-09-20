@@ -41,6 +41,8 @@ scope и allowed/forbidden. Спор о том, было ли решение, т
 - `skills/` — вызываемые процедуры протокола: preflight, decision, handoff,
   incident, verify.
 - `tools/` — protocol_lint.py: самопроверка согласованности протокола.
+- `mcp_server/` — MCP-сервер протокола (resources/prompts/tools поверх
+  канона); подключение — `.mcp.json.example` и agents/AGENT_RUNTIMES.md.
 - `evidence/` — место для receipts и snapshots.
 
 ## С чего начать

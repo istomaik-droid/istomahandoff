@@ -37,6 +37,22 @@ verify — по ситуации (whenToUse в каждом SKILL.md).
   или с inline-копией процедуры.
 - Вызов: по имени процедуры в тексте («выполни preflight»).
 
+## MCP-сервер
+
+MCP-сервер — предпочтительный способ, скиллы-копии — fallback.
+Сервер (`mcp_server/server.py`, stdio) отдаёт канон docs/ и agents/ как
+resources, процедуры skills/ как prompts и добавляет tools (protocol_lint,
+record_decision, validate_transition и др. — см. `mcp_server/README.md`).
+Нормы в коде не дублируются: сервер читает файлы репозитория.
+
+- Kimi Code: скопировать `.mcp.json.example` в `.mcp.json` проекта
+  (stdio, `python mcp_server/server.py`, запуск из корня репозитория).
+- Claude Code: тот же `.mcp.json` в корне проекта, либо
+  `claude mcp add istomahandoff -- python mcp_server/server.py`.
+- Codex: секция `mcp_servers` в `config.toml` с той же командой запуска.
+
+Enforcement сервера — только для добросовестного пути (E1–E2, docs/44).
+
 ## Правила инстанцирования
 
 1. Файлы копируются, не перемещаются: канон остаётся в репозитории протокола.
