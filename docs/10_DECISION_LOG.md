@@ -134,6 +134,30 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0006
+  date: 2026-09-19
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: пилот compression gateway на рабочей машине владельца
+  decision: Владелец разрешил установку и пилот self-host compression
+    gateway Paritok (Apache 2.0) на своей машине: установка Ollama и
+    pip-пакета paritok[proxy,toolselect], модель paritok-4b-v1 (~2.5GB,
+    локально), прокси на 127.0.0.1:8080. Пилот — сессии ИИ-агентов на
+    этой машине. Spend: 0 (self-host, без API-ключей и hosted-режима).
+  allowed:
+    - установка Ollama, paritok, модели на эту машину
+    - запуск прокси на loopback
+    - пилотное проксирование сессий агентов через gateway
+    - фиксация факта работы через gateway в evidence (docs/31)
+  forbidden:
+    - hosted-режим gpu_server и API-ключи paritok.com
+    - отправка production-секретов через gateway
+    - использование вне пилота без отдельного решения
+    - вывод gateway за пределы loopback
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
