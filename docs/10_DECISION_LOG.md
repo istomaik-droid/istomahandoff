@@ -227,6 +227,31 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0010
+  date: 2026-09-20
+  owner: OWNER
+  type: CORRECTION
+  scope: mcp_server/, dl-server (187.124.114.130)
+  decision: Корректировка DEC-0009 по фактуре сервера: VPN на dl-server —
+    xray (прокси уровня приложения), VPN-интерфейса для биндинга нет
+    (только lo и eth0). Способ изоляции меняется: MCP-сервер слушает
+    только 127.0.0.1 на VPS, доступ — через SSH-туннель
+    (ssh -L) с машины владельца. Публичная поверхность не увеличивается.
+    Хост подтверждён владельцем: dl-server (там же VPN и статистика
+    обновлений; DreamLaser и xray не затрагиваются).
+  allowed:
+    - клон репозитория в /opt/istomahandoff на dl-server
+    - venv + pip install mcp на dl-server
+    - systemd-юнит istomahandoff-mcp (127.0.0.1:8000)
+    - SSH-туннель с машины владельца
+  forbidden:
+    - биндинг на eth0/0.0.0.0
+    - открытие порта 8000 в firewall
+    - изменения в сервисах dreamlaser, xray, nginx
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
