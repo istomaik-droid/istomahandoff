@@ -5,6 +5,8 @@
 добросовестного пути (E1–E2, docs/44).
 
 Запуск: python mcp_server/server.py  (stdio-транспорт)
+Корень репозитория: родитель mcp_server/ либо env ISTOMAHANDOFF_ROOT
+(позволяет одному установленному серверу обслуживать любой проект).
 """
 import datetime as dt
 import hashlib
@@ -18,7 +20,10 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-ROOT = Path(__file__).resolve().parent.parent
+_env_root = os.environ.get("ISTOMAHANDOFF_ROOT", "").strip()
+ROOT = Path(_env_root).resolve() if _env_root else Path(__file__).resolve().parent.parent
+if not (ROOT / "docs").is_dir():
+    raise RuntimeError(f"корень репозитория не содержит docs/: {ROOT}")
 
 mcp = FastMCP("istomahandoff")
 
