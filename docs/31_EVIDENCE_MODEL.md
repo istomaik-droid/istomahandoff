@@ -56,3 +56,11 @@ ROLLED_BACK
 ```
 
 Недостаток данных = INCONCLUSIVE. Security incident = STOPPED.
+
+## Compressed context
+
+Evidence — только неизменные артефакты на диске (receipt, snapshot, hashes).
+История контекста сессии — не evidence, сжатая gateway или нет.
+
+Работа агента через compression gateway фиксируется в evidence и handoff:
+имя, версия, режим (self-host/hosted), что сжималось.

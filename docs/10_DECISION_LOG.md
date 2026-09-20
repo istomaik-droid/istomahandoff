@@ -111,6 +111,29 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0005
+  date: 2026-09-19
+  owner: OWNER
+  type: CORRECTION
+  scope: docs/05, docs/31, docs/34, docs/42, templates/PROJECT_PROFILE.yaml
+  decision: Владелец утвердил вписывание compression gateway (класс
+    инструментов сжатия контекста агента, напр. Paritok) в протокол:
+    включение gateway в цепочку агент→LLM — provider-класс, запрещено
+    без owner decision (docs/05); сжатый контекст не является evidence,
+    работа через gateway фиксируется в evidence/handoff (docs/31);
+    восстановление контекста — только по документам, не по истории
+    переписки, сжатой или нет (docs/34). Конкретное использование
+    конкретного gateway — отдельное R5-решение.
+  allowed:
+    - добавочные правила про compression gateway
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

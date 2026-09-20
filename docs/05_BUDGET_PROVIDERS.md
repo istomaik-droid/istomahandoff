@@ -13,6 +13,8 @@ hosting, консультация, найм — отдельное решени�
 - Выбор object storage.
 - Выбор observability.
 - Выбор scan provider.
+- Включение compression gateway/proxy в цепочку агент→LLM
+  (provider-класс: видит и переписывает каждый запрос; self-host тоже).
 - Любые external commitments.
 
 R5-решения мандатом deputy не покрываются (docs/46).

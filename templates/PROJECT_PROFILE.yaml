@@ -2,7 +2,7 @@ projectProfile:
   name: <PROJECT_NAME>
   owner: <OWNER_NAME>
   protocol:
-    version: "2.2"
+    version: "2.5"
     defaultLevel: P1              # P0 | P1 | P2 по умолчанию
     perClassLevel:                # опциональные переопределения
       R0: P0
