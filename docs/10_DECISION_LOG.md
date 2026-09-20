@@ -205,6 +205,28 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0009
+  date: 2026-09-20
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/, VPS владельца
+  decision: Владелец разрешил network effect: размещение MCP-сервера
+    на своём VPS (там уже работает VPN владельца) для личного
+    использования. Режим: streamable-http, биндинг ТОЛЬКО на
+    VPN-интерфейс; публичная доступность, домен и TLS не требуются.
+    Spend: 0 (VPS и домен уже есть).
+  allowed:
+    - HTTP-транспорт в mcp_server/server.py (MCP_TRANSPORT/HOST/PORT)
+    - развёртывание на VPS по SSH: клон репозитория, pip, systemd-юнит
+    - биндинг на VPN-интерфейс
+  forbidden:
+    - биндинг на публичный интерфейс (0.0.0.0 / публичный IP)
+    - открытие порта наружу (firewall)
+    - hosted-режим для третьих лиц
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

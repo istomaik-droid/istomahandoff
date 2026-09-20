@@ -30,3 +30,4 @@ External agent называет прочитанную версию.
 | 2.6 | 2026-09-20 | MCP-сервер протокола (DEC-0007): mcp_server/server.py — resources (канон), prompts (скиллы), tools: protocol_lint, record_decision (отказ ACCEPTANCE/RELEASE без evidenceReadHash), get_active_state, evidence_hash, validate_transition, list_expired, audit_sample, protocol_version; enforcement добросовестного пути (E1–E2) |
 | 2.7 | 2026-09-20 | Enforcement-tools + CI (DEC-0008): checkpoint_create (git tag с readback, docs/19), pre_deploy_check (чистое дерево, docs/38); GitHub Actions: protocol_lint + smoke-тест сервера на push |
 | 2.8 | 2026-09-20 | Размещение MCP-сервера: ISTOMAHANDOFF_ROOT — один сервер обслуживает любой проект; схема размещения (пользовательский/проектный конфиг) в AGENT_RUNTIMES |
+| 2.9 | 2026-09-20 | HTTP-режим MCP-сервера (DEC-0009): streamable-http через MCP_TRANSPORT/HOST/PORT для размещения на VPS владельца; биндинг только VPN/loopback, публичный запрещён |

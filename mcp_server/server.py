@@ -25,7 +25,11 @@ ROOT = Path(_env_root).resolve() if _env_root else Path(__file__).resolve().pare
 if not (ROOT / "docs").is_dir():
     raise RuntimeError(f"корень репозитория не содержит docs/: {ROOT}")
 
-mcp = FastMCP("istomahandoff")
+mcp = FastMCP(
+    "istomahandoff",
+    host=os.environ.get("MCP_HOST", "127.0.0.1"),
+    port=int(os.environ.get("MCP_PORT", "8000")),
+)
 
 # ---------------------------------------------------------------------------
 # Чтение канона
@@ -459,4 +463,6 @@ def pre_deploy_check(own_files: list[str] | None = None) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    # stdio — локальный агент; streamable-http — VPS/сеть (MCP_TRANSPORT=http)
+    transport = "streamable-http" if os.environ.get("MCP_TRANSPORT") == "http" else "stdio"
+    mcp.run(transport=transport)

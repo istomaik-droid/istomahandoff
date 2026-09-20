@@ -17,13 +17,17 @@ MCP-сервер (stdio) поверх канона протокола: норм�
 
 ```bash
 pip install "mcp<2"
-python mcp_server/server.py   # stdio-транспорт
+python mcp_server/server.py   # stdio-транспорт (локальный агент)
+
+# HTTP-режим (VPS/сеть, DEC-0009):
+MCP_TRANSPORT=http MCP_HOST=10.0.0.1 MCP_PORT=8000 python mcp_server/server.py
 ```
 
 Подключение к рантаймам — см. `.mcp.json.example` и раздел «MCP-сервер»
 в `agents/AGENT_RUNTIMES.md`. Корень репозитория — родитель `mcp_server/`
 либо переменная окружения `ISTOMAHANDOFF_ROOT` (один сервер может
-обслуживать другой проект без копирования).
+обслуживать другой проект без копирования). HTTP-режим — только на
+VPN/loopback-интерфейсе, публичный биндинг запрещён (DEC-0009).
 
 ## Ограничения (честно)
 
