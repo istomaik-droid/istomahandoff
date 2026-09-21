@@ -252,6 +252,29 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0011
+  date: 2026-09-20
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/server.py, dl-server (/opt/istomahandoff), GitHub repo
+  decision: Владелец утвердил авто-синхронизацию decision log: после
+    записи решения record_decision делает git commit + push (только
+    docs/10_DECISION_LOG.md). На dl-server создаётся deploy key с
+    write-доступом к репозиторию istomahandoff для push с VPS.
+    При недоступности GitHub запись не теряется: решение остаётся
+    закоммиченным локально на VPS, tool честно возвращает pushed=false.
+  allowed:
+    - авто commit+push docs/10 в record_decision
+    - deploy key (write) для репозитория на dl-server
+    - git identity в /opt/istomahandoff на dl-server
+  forbidden:
+    - commit чего-либо кроме docs/10_DECISION_LOG.md
+    - push force, переписывание истории
+    - использование deploy key для других репозиториев
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

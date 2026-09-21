@@ -270,7 +270,32 @@ def record_decision(
     except BaseException:
         os.unlink(tmp)
         raise
-    return {"id": dec_id, "date": dt.date.today().isoformat(), "type": type}
+
+    git = _sync_decision_log(dec_id, type)
+    return {"id": dec_id, "date": dt.date.today().isoformat(),
+            "type": type, "git": git}
+
+
+def _sync_decision_log(dec_id: str, type_: str) -> dict:
+    """Авто commit+push docs/10 после записи решения (DEC-0011).
+
+    Только docs/10; push — best effort: при недоступности GitHub решение
+    остаётся закоммиченным локально, pushed=false.
+    """
+    rel = "docs/10_DECISION_LOG.md"
+    if _git(["add", rel]).returncode != 0:
+        return {"committed": False, "pushed": False, "error": "git add failed"}
+    c = _git(["commit", "-m", f"Запиши {dec_id} (auto, MCP record_decision)",
+              "--", rel])
+    if c.returncode != 0:
+        return {"committed": False, "pushed": False,
+                "error": c.stderr.strip() or "git commit failed"}
+    p = _git(["push"])
+    out = {"committed": True, "pushed": p.returncode == 0}
+    if p.returncode != 0:
+        out["error"] = p.stderr.strip() or "git push failed"
+        out["note"] = "решение закоммичено локально; выполните git push позже"
+    return out
 
 
 @mcp.tool()
