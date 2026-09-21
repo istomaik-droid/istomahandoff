@@ -275,6 +275,20 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0012
+  date: 2026-09-21
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: dl-server (/opt/istomahandoff)
+  decision: Развёртывание MCP-сервера на VPS завершено и проверено сквозным вызовом через SSH-туннель; включена авто-синхронизация decision log (commit+push при записи, DEC-0011). Эта запись — живой тест авто-синхронизации.
+  allowed:
+    - работа службы istomahandoff-mcp на 127.0.0.1:8000
+  forbidden:
+    - биндинг на публичный интерфейс
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
