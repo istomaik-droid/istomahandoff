@@ -289,6 +289,32 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0013
+  date: 2026-09-20
+  owner: OWNER
+  type: CORRECTION
+  scope: docs/05, docs/30, docs/33, docs/41
+  decision: Владелец утвердил правила стоимости по анализу реальных
+    журналов субагентов (расход = ходы × длина контекста; cache-read
+    доминирует): модель по классу задачи — механические на дешёвой,
+    расследования на сильной, дорогое финальное ревью раз на ветку
+    (docs/05); лимит ~150 ходов на work item, затем handoff новому
+    агенту (docs/33 п. 30); повторяемая проверка — одним гейт-скриптом
+    (docs/30); метрики turns/cache-read в docs/41. Paritok: пилот
+    отдельно и ПОСЛЕ внедрения этих правил, с замером по /stats;
+    постоянное использование — отдельное решение по данным пилота.
+  allowed:
+    - добавочные правила стоимости в docs/05, 30, 33, 41
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+    - одновременное внедрение правил ходов и compression gateway
+      без раздельного замера
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

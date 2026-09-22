@@ -31,3 +31,4 @@ External agent называет прочитанную версию.
 | 2.7 | 2026-09-20 | Enforcement-tools + CI (DEC-0008): checkpoint_create (git tag с readback, docs/19), pre_deploy_check (чистое дерево, docs/38); GitHub Actions: protocol_lint + smoke-тест сервера на push |
 | 2.8 | 2026-09-20 | Размещение MCP-сервера: ISTOMAHANDOFF_ROOT — один сервер обслуживает любой проект; схема размещения (пользовательский/проектный конфиг) в AGENT_RUNTIMES |
 | 2.9 | 2026-09-20 | HTTP-режим MCP-сервера (DEC-0009): streamable-http через MCP_TRANSPORT/HOST/PORT для размещения на VPS владельца; биндинг только VPN/loopback, публичный запрещён |
+| 2.10 | 2026-09-20 | Правила стоимости (DEC-0013, по журналам субагентов): модель по классу задачи (docs/05), лимит ~150 ходов на work item (docs/33 п.30), гейт-скрипт (docs/30), метрики стоимости (docs/41); пилот compression gateway — отдельно и после |
