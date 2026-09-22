@@ -315,6 +315,29 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0014
+  date: 2026-09-20
+  owner: OWNER
+  type: CORRECTION
+  scope: agents/AGENT_RUNTIMES.md, docs/44
+  decision: Владелец утвердил покрытие остальных рантаймов и адаптацию
+    под модель: инструкции для Cursor (.cursor/rules) и Gemini CLI
+    (GEMINI.md); пометка про HTTP-транспорт Codex (fallback — локальный
+    stdio); правило «слабая модель → P0 + enforcement в MCP-tools,
+    минимум длинных инструкций»; в docs/44 п. 6 — уровень enforcement
+    определяется возможностями рантайма, а не моделью.
+  allowed:
+    - разделы Cursor и Gemini CLI в AGENT_RUNTIMES
+    - правило адаптации под модель
+    - пункт 6 в docs/44
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
