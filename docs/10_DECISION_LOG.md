@@ -338,6 +338,35 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0015
+  date: 2026-10-01
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: docs/48_DOC_INDEX.md, docs/INDEX.md, docs/40, docs/42,
+    agents/AGENT_CONTRACT.md, tools/protocol_lint.py, README.md
+  decision: Владелец утвердил индекс документов и чтение по требованию
+    как меру экономии контекста агента: docs/INDEX.md — оглавление
+    с тирами must-read/reference, одна строка на документ; docs/48 —
+    норма: не читать reference-документы «про запас», ссылка вместо
+    пересказа, одно правило — один документ, запись в INDEX обязательна
+    для нового документа; антипаттерны 20–22 (docs/40); обязанность
+    чтения по требованию в AGENT_CONTRACT; protocol_lint проверяет
+    покрытие INDEX.
+  allowed:
+    - docs/48_DOC_INDEX.md и docs/INDEX.md
+    - правки docs/40, docs/42, README.md
+    - пункт про чтение по требованию в agents/AGENT_CONTRACT.md
+    - проверка INDEX в tools/protocol_lint.py
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+    - отмена или изменение DEC-0013 (правила стоимости, отложенный
+      пилот compression gateway)
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

@@ -6,6 +6,8 @@
   3. Записи DEC в docs/10 содержат обязательные поля.
   4. Нумерация пунктов docs/33 (stop conditions) непрерывна.
   5. State-подобные токены (UPPER_SNAKE) — известны (warning, если нет).
+  6. docs/INDEX.md покрывает все docs/NN_*.md и не ссылается на
+     несуществующие (docs/48).
 
 Запуск: python tools/protocol_lint.py   (из корня репозитория протокола)
 """
@@ -126,6 +128,19 @@ def check_stop_conditions():
         errors.append(f"docs/33: нумерация stop conditions не непрерывна: {nums}")
 
 
+def check_index():
+    p = ROOT / "docs" / "INDEX.md"
+    if not p.exists():
+        errors.append("docs/INDEX.md отсутствует")
+        return
+    listed = set(re.findall(r"docs/(\d{2})", p.read_text(encoding="utf-8")))
+    actual = {f.name[:2] for f in (ROOT / "docs").glob("[0-9][0-9]_*.md")}
+    for n in sorted(actual - listed):
+        errors.append(f"docs/INDEX.md: нет записи для docs/{n}")
+    for n in sorted(listed - actual):
+        errors.append(f"docs/INDEX.md: запись docs/{n} — файл не существует")
+
+
 def check_skills():
     for p in sorted((ROOT / "skills").glob("*/SKILL.md")):
         head = p.read_text(encoding="utf-8")[:600]
@@ -145,6 +160,7 @@ def main():
     check_state_enum()
     check_decisions()
     check_stop_conditions()
+    check_index()
     check_skills()
 
     print(f"Проверено файлов: {len(files)}")
