@@ -1,0 +1,20 @@
+name: protocol-lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MCP SDK
+        run: pip install "mcp<2"
+      - name: Protocol lint
+        run: python tools/protocol_lint.py
+      - name: MCP server smoke test (import only)
+        run: python -c "from mcp_server.server import mcp; print('server import ok')"
