@@ -1,3 +1,4 @@
 *.zip
-CLAUDE.md
+CLAUDE.pilot-sample.md
 __pycache__/
+.pytest_cache/

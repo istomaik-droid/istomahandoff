@@ -367,6 +367,55 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0016
+  date: 2026-10-16
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/, tests/, .github/workflows/, agents/AGENT_RUNTIMES.md,
+    docs/42, docs/10 (эта запись), AGENTS.md, CLAUDE.md, .gitignore;
+    вне репозитория — пользовательский конфиг Kimi владельца, второй
+    локальный клон протокола, ruleset ветки master на GitHub
+  decision: Владелец утвердил пакет 1 по итогам анализа 15.10 — запись
+    решения только туда, куда задумано (подробности — mcp_server/README.md,
+    «Запись решений»). Корректирует DEC-0011: авто commit+push docs/10
+    выключен по умолчанию и включается ISTOMAHANDOFF_AUTOSYNC=1 только у
+    единственного писателя журнала; писатель этим решением не назначается,
+    до отдельного решения переменная нигде не включается и инстанс на VPS
+    не обновляется. record_decision строже проверяет поля и помечен
+    requiresUserInteraction, git-tools сообщают проверенный репозиторий,
+    тесты pytest и шаг в CI, mcp закреплён; собственный AGENTS.md
+    протокола, образец CLAUDE.md пилота переименован и остаётся вне git.
+    Вне репозитория: в пользовательском конфиге Kimi оставлены только tools
+    чтения канона; во втором локальном клоне снят staged-дубль решения
+    другого проекта (с бэкапом патча), клон обновляется после слияния; на
+    master включается ruleset — запрет force-push и удаления. Класс риска
+    R4 (путь записи полномочий); фактический enforcement — E0 плюс pytest и
+    protocol_lint в CI и просмотр диффа владельцем в pull request; работа
+    ниже требуемого для R4 уровня E2 принята владельцем (docs/44 п.4,
+    docs/45 п.4).
+  allowed:
+    - правки mcp_server/server.py, mcp_server/README.md,
+      mcp_server/requirements.txt
+    - tests/ и шаг pytest в .github/workflows/
+    - разделы «Размещение» и «Подключение» в agents/AGENT_RUNTIMES.md
+    - AGENTS.md, CLAUDE.md (импорт AGENTS.md), .gitignore
+    - строка 2.13 в docs/42
+    - ветка, commit, push и pull request в GitHub
+    - ruleset master на GitHub: запрет force-push и удаления
+    - список tools сервера в пользовательском конфиге Kimi (с бэкапом)
+    - второй локальный клон: снятие staged-дубля (с бэкапом) и обновление
+  forbidden:
+    - изменение главного правила
+    - изменение state machine
+    - изменение risk classes
+    - изменение формата записей docs/10
+    - force-push и переписывание истории
+    - вызов record_decision и checkpoint_create на реальных клонах
+    - включение ISTOMAHANDOFF_AUTOSYNC и обновление инстанса на VPS
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
