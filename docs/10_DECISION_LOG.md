@@ -416,6 +416,55 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0017
+  date: 2026-10-17
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/server.py, mcp_server/README.md, tools/protocol_lint.py,
+    tests/, .gitattributes, docs/31, skills/verify, docs/42,
+    docs/10 (эта запись)
+  decision: Владелец утвердил пакет «честные гейты» по итогам анализа 15.10
+    (подробности — mcp_server/README.md, «Гейты»). pre_deploy_check
+    считает изменения по git status -z: кириллица, пробелы, файлы внутри
+    новых каталогов и обе стороны переименования без ложного STOP;
+    own_files — относительно корня репозитория; длинные списки обрезаются
+    со счётчиками. checkpoint_create отказывает при незакоммиченных
+    изменениях отслеживаемых файлов (запись решения коммитится до
+    checkpoint) и ставит annotated tag (нужна git identity репозитория).
+    validate_transition: условный запрет docs/16 на шаге цепочки —
+    CONDITIONAL с forbiddenWhen, аварийный переход с обобщённым источником —
+    CONDITIONAL с requiresState, прыжок через стадии — FORBIDDEN (docs/33
+    п.21); docs/16 не меняется. protocol_lint проверяет записи docs/10:
+    все внутри блока «## Записи», DEC-ID уникальны и растут (мандат — запись
+    DEC с type MANDATE, номер MANDATE-XXXX — в тексте), type из enum схемы,
+    sha256 у ACCEPTANCE/RELEASE, существующая дата ISO8601 в expiresAt;
+    дата раньше предыдущей — только предупреждение (история не правится).
+    Хэш evidence — sha256 байтов файла в репозитории, evidence без
+    EOL-конверсии (.gitattributes); skills/verify ссылается на эту норму.
+    Класс риска R3 (смешанный scope R2–R3 — по высшему, docs/12 п.5);
+    фактический enforcement — E0 плюс pytest и protocol_lint в CI и
+    просмотр диффа владельцем в pull request; работа ниже требуемого для
+    R3 уровня E1 принята владельцем (docs/44 п.4).
+  allowed:
+    - правки mcp_server/server.py и mcp_server/README.md
+    - проверки записей docs/10 в tools/protocol_lint.py
+    - tests/ (включая общий conftest.py)
+    - .gitattributes с правилом evidence/** -text
+    - раздел «Хэш evidence» в docs/31
+    - п.5 skills/verify — ссылка на «Хэш evidence» docs/31
+    - строка 2.14 в docs/42
+    - ветка, commit, push и pull request в GitHub
+  forbidden:
+    - изменение главного правила
+    - изменение state machine (docs/16)
+    - изменение risk classes
+    - изменение формата записей docs/10
+    - ослабление вердиктов гейтов сверх перечисленного в decision
+    - force-push и переписывание истории
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила

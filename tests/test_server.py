@@ -1,12 +1,10 @@
-"""Тесты MCP-сервера протокола: запись решений и git-tools (DEC-0016).
+"""Тесты MCP-сервера протокола: запись решений и git-tools (DEC-0016, DEC-0017).
 
-Каждый тест работает на копии канона во временном каталоге: свежий git init
-и локальный bare-remote вместо GitHub. Реальный репозиторий и сеть не трогаются.
+Фикстуры копий канона и локального bare-remote — в conftest.py.
 """
 import asyncio
 import importlib.util
 import itertools
-import os
 import re
 import shutil
 import subprocess
@@ -14,122 +12,15 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parent.parent
+from conftest import LOG, REPO, configure, copy_canon, git, write_hook
+
 SERVER_PY = REPO / "mcp_server" / "server.py"
-CANON_DIRS = ("docs", "agents", "skills", "templates", "tools")
-LOG = "docs/10_DECISION_LOG.md"
 SHA = "0" * 63 + "1"
 DEPUTY = {"owner": "Заместитель", "mandateRef": "MANDATE-0001"}
 # невидимые символы — через chr(), чтобы их было видно в исходнике и диффе
 LS, PS, NEL, FS, VT, RLO, ZWSP = (chr(c) for c in (
     0x2028, 0x2029, 0x85, 0x1C, 0x0B, 0x202E, 0x200B))
 _module_ids = itertools.count()
-
-# Минимальный журнал: схема с enum типов, одна запись, раздел правил.
-LOG_FIXTURE = """# 10. Decision log
-
-Append-only.
-
-```yaml
-- id: DEC-XXXX
-  date: <ISO8601>
-  owner: <NAME>            # или deputy с mandateRef
-  type: BOUNDARY | IMPLEMENTATION | ACCEPTANCE | BACKUP | RELEASE | STOP | PAUSE | CORRECTION | MIGRATION | MANDATE
-  scope: <STAGE / WORKITEM>
-  decision: <текст>
-  allowed: []
-  forbidden: []
-  expiresAt: <ISO8601 | null>
-  receiptSha256: <sha256>
-  evidenceReadHash: <sha256 | null>   # ОБЯЗАТЕЛЕН для ACCEPTANCE/RELEASE
-  mandateRef: <MANDATE-XXXX | null>   # обязателен для deputy
-```
-
-## Записи
-
-```yaml
-- id: DEC-0001
-  date: 2026-09-19
-  owner: OWNER
-  type: CORRECTION
-  scope: docs/
-  decision: исходная запись
-  allowed:
-    - a
-  forbidden:
-    - b
-  expiresAt: null
-  receiptSha256: null
-  evidenceReadHash: null
-  mandateRef: null
-```
-
-## Правила
-
-1. Каждое решение имеет ID.
-"""
-
-_GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX",
-            "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_AUTHOR_DATE",
-            "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_COMMITTER_DATE")
-
-
-@pytest.fixture(autouse=True)
-def isolate_git_env(monkeypatch):
-    """Запуск pytest из git-хука наследует GIT_INDEX_FILE и т.п. внешнего
-    репозитория — тесты не должны писать в его индекс."""
-    for var in _GIT_ENV:
-        monkeypatch.delenv(var, raising=False)
-
-
-def git(cwd, *args, check=True):
-    proc = subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
-    )
-    if check and proc.returncode != 0:
-        raise AssertionError(f"git {' '.join(args)}: {proc.stderr}")
-    return proc.stdout.rstrip()  # не strip(): ведущий пробел значим в status
-
-
-def configure(repo):
-    git(repo, "config", "user.name", "test")
-    git(repo, "config", "user.email", "test@example.invalid")
-    git(repo, "config", "core.autocrlf", "false")
-    git(repo, "config", "commit.gpgsign", "false")
-
-
-def copy_canon(dest):
-    for d in CANON_DIRS:
-        shutil.copytree(REPO / d, dest / d,
-                        ignore=shutil.ignore_patterns("__pycache__"))
-    # LF, как на CI: результат не зависит от core.autocrlf машины
-    for p in dest.rglob("*"):
-        if p.is_file() and p.suffix in (".md", ".yaml", ".py"):
-            p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n"))
-    (dest / LOG).write_text(LOG_FIXTURE, encoding="utf-8", newline="\n")
-
-
-@pytest.fixture
-def repo(tmp_path):
-    root = tmp_path / "repo"
-    copy_canon(root)
-    git(tmp_path, "init", "-q", "-b", "master", str(root))
-    configure(root)
-    git(root, "add", "-A")
-    git(root, "commit", "-q", "-m", "base")
-    return root
-
-
-@pytest.fixture
-def remote(repo, tmp_path):
-    bare = tmp_path / "remote.git"
-    git(tmp_path, "init", "-q", "--bare", "-b", "master", str(bare))
-    git(repo, "remote", "add", "origin", str(bare))
-    git(repo, "push", "-q", "-u", "origin", "master")
-    return bare
-
 
 @pytest.fixture
 def load_server(monkeypatch):
@@ -147,13 +38,6 @@ def load_server(monkeypatch):
         assert mod.ROOT.resolve() == Path(root).resolve()
         return mod
     return _load
-
-
-def write_hook(git_dir, name, body):
-    hook = Path(git_dir) / "hooks" / name
-    hook.write_text("#!/bin/sh\n" + body + "\n", encoding="utf-8", newline="\n")
-    os.chmod(hook, 0o755)
-    return hook
 
 
 def decide(srv, **overrides):
@@ -486,3 +370,230 @@ def test_head_is_none_in_a_repository_without_commits(tmp_path, load_server):
     git(tmp_path, "init", "-q", "-b", "master", str(root))
     srv = load_server(root)
     assert srv.pre_deploy_check()["head"] is None
+
+
+# --- честные гейты (DEC-0017) ----------------------------------------------
+
+def test_pre_deploy_check_recognizes_own_cyrillic_and_spaced_files(repo, load_server):
+    (repo / "ЖУРНАЛ_СЕССИИ_2026-10-16.md").write_text("журнал\n", encoding="utf-8")
+    (repo / "my notes.md").write_text("заметки\n", encoding="utf-8")
+    srv = load_server(repo)
+    res = srv.pre_deploy_check(own_files=["ЖУРНАЛ_СЕССИИ_2026-10-16.md", "my notes.md"])
+    assert res["verdict"] == "DIRTY_OWN"
+    assert sorted(res["changed"]) == ["my notes.md", "ЖУРНАЛ_СЕССИИ_2026-10-16.md"]
+
+
+def test_pre_deploy_check_sees_files_inside_new_directories(repo, load_server):
+    (repo / "newmod").mkdir()
+    (repo / "newmod" / "own.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "newmod" / "foreign.py").write_text("y = 2\n", encoding="utf-8")
+    srv = load_server(repo)
+    res = srv.pre_deploy_check(own_files=["newmod/own.py"])
+    assert res["verdict"] == "DIRTY_FOREIGN"
+    assert res["foreign"] == ["newmod/foreign.py"]
+    # каталог в own_files не прячет чужой файл внутри
+    assert srv.pre_deploy_check(own_files=["newmod/"])["verdict"] == "DIRTY_FOREIGN"
+
+
+def test_pre_deploy_check_counts_both_sides_of_a_rename(repo, load_server):
+    git(repo, "mv", "templates/ADR.md", "templates/ADR_v2.md")
+    srv = load_server(repo)
+    both = srv.pre_deploy_check(own_files=["templates/ADR.md", "templates/ADR_v2.md"])
+    assert both["verdict"] == "DIRTY_OWN"
+    new_only = srv.pre_deploy_check(own_files=["templates/ADR_v2.md"])
+    assert new_only["verdict"] == "DIRTY_FOREIGN"
+    assert new_only["foreign"] == ["templates/ADR.md"]
+
+
+def test_pre_deploy_check_normalizes_own_paths(repo, load_server):
+    with (repo / "docs/01_PRODUCT_BOUNDARY.md").open("a", encoding="utf-8", newline="\n") as f:
+        f.write("правка\n")
+    srv = load_server(repo)
+    for own in ("docs" + chr(92) + "01_PRODUCT_BOUNDARY.md", "./docs/01_PRODUCT_BOUNDARY.md",
+                str(repo / "docs" / "01_PRODUCT_BOUNDARY.md")):
+        assert srv.pre_deploy_check(own_files=[own])["verdict"] == "DIRTY_OWN", own
+
+
+def test_pre_deploy_check_keeps_short_names_and_dot_prefixes(repo, load_server):
+    (repo / "x").write_text("x\n", encoding="utf-8")
+    srv = load_server(repo)
+    assert srv.pre_deploy_check()["verdict"] == "DIRTY_FOREIGN"  # не CLEAN
+    assert srv.pre_deploy_check(["././x"])["verdict"] == "DIRTY_OWN"
+
+
+def test_pre_deploy_check_does_not_repeat_paths(repo, load_server):
+    git(repo, "mv", "templates/ADR.md", "templates/ADR_v2.md")
+    (repo / "templates" / "ADR.md").write_text("снова\n", encoding="utf-8")
+    changed = load_server(repo).pre_deploy_check()["changed"]
+    assert len(changed) == len(set(changed))
+
+
+def test_own_files_are_relative_to_the_repository_root(tmp_path, load_server):
+    outer = tmp_path / "outer"
+    copy_canon(outer / "canon")
+    git(tmp_path, "init", "-q", "-b", "master", str(outer))
+    configure(outer)
+    git(outer, "add", "-A")
+    git(outer, "commit", "-q", "-m", "base")
+    target = outer / "canon" / "docs" / "01_PRODUCT_BOUNDARY.md"
+    with target.open("a", encoding="utf-8", newline="\n") as f:
+        f.write("правка\n")
+    srv = load_server(outer / "canon")
+    assert srv.pre_deploy_check(["canon/docs/01_PRODUCT_BOUNDARY.md"])["verdict"] == "DIRTY_OWN"
+    assert srv.pre_deploy_check([str(target)])["verdict"] == "DIRTY_OWN"
+    assert srv.pre_deploy_check(["docs/01_PRODUCT_BOUNDARY.md"])["verdict"] == "DIRTY_FOREIGN"
+
+
+def test_gate_lists_are_capped_but_counted(repo, load_server):
+    (repo / "build").mkdir()
+    for i in range(250):
+        (repo / "build" / f"f{i:03d}.txt").write_text("x\n", encoding="utf-8")
+    srv = load_server(repo)
+    res = srv.pre_deploy_check()
+    assert res["verdict"] == "DIRTY_FOREIGN"
+    assert res.get("changedCount") == 250 and res.get("foreignCount") == 250
+    assert len(res["changed"]) < 250 and res.get("truncated") is True
+    cp = srv.checkpoint_create("big")
+    assert cp.get("untrackedCount") == 250 and len(cp["untracked"]) < 250
+
+
+@pytest.mark.parametrize("change", ["unstaged", "staged", "new_staged", "removed"])
+def test_checkpoint_refuses_any_tracked_change(repo, load_server, change):
+    path = repo / "docs/01_PRODUCT_BOUNDARY.md"
+    if change in ("unstaged", "staged"):
+        with path.open("a", encoding="utf-8", newline="\n") as f:
+            f.write("правка\n")
+        if change == "staged":
+            git(repo, "add", "docs/01_PRODUCT_BOUNDARY.md")
+    elif change == "new_staged":
+        (repo / "new.md").write_text("новый\n", encoding="utf-8")
+        git(repo, "add", "new.md")
+    else:
+        git(repo, "rm", "-q", "docs/01_PRODUCT_BOUNDARY.md")
+    srv = load_server(repo)
+    with pytest.raises(ValueError):
+        srv.checkpoint_create("pre-change")
+    assert git(repo, "tag", "--list", "checkpoint/*") == ""
+
+
+def test_checkpoint_after_boundary_needs_the_decision_committed(repo, load_server):
+    srv = load_server(repo)
+    decide(srv, type="BOUNDARY")  # запись осталась в рабочем дереве
+    with pytest.raises(ValueError):
+        srv.checkpoint_create("pre-change")
+    git(repo, "commit", "-q", "-m", "BOUNDARY", "--", LOG)
+    assert srv.checkpoint_create("pre-change")["verified"] is True
+
+
+def test_checkpoint_without_git_identity_refuses_clearly(repo, tmp_path, monkeypatch, load_server):
+    empty = tmp_path / "empty.gitconfig"
+    empty.write_text("", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(empty))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.delenv("EMAIL", raising=False)
+    git(repo, "config", "--unset", "user.name")
+    git(repo, "config", "--unset", "user.email")
+    git(repo, "config", "user.useConfigOnly", "true")
+    srv = load_server(repo)
+    # совет — задать identity в этом репозитории, а не трогать глобальный конфиг
+    with pytest.raises(ValueError, match="глобальный"):
+        srv.checkpoint_create("pre-change")
+    assert git(repo, "tag", "--list", "checkpoint/*") == ""
+
+
+def test_checkpoint_readback_mismatch_is_not_verified(repo, monkeypatch, load_server):
+    srv = load_server(repo)
+    real = srv._git
+
+    def fake(args, timeout=None):
+        if args[:1] == ["rev-parse"] and args[-1].endswith("^{commit}"):
+            return subprocess.CompletedProcess(args, 0, "0" * 40 + "\n", "")
+        return real(args, timeout)
+
+    monkeypatch.setattr(srv, "_git", fake)
+    cp = srv.checkpoint_create("t")
+    assert cp["verified"] is False and "READBACK" in cp["note"]
+
+
+def test_checkpoint_is_annotated_and_reports_untracked_files(repo, load_server):
+    (repo / "scratch.txt").write_text("черновик\n", encoding="utf-8")
+    head = git(repo, "rev-parse", "HEAD")
+    srv = load_server(repo)
+    cp = srv.checkpoint_create("pre-change")
+    assert cp["verified"] is True
+    assert cp["sha"] == head
+    assert cp.get("untracked") == ["scratch.txt"]
+    assert cp.get("pushed") is False
+    assert git(repo, "cat-file", "-t", cp["tag"]) == "tag"
+    assert git(repo, "rev-parse", cp["tag"] + "^{commit}") == head
+
+
+@pytest.mark.parametrize("fr, to, verdict, kind, field, value", [
+    ("INTAKE", "TRIAGE", "VALID", "chain", None, None),
+    ("EVIDENCE_READY", "TECHNICAL_REVIEW_PASSED", "VALID", "chain", None, None),
+    ("TECHNICAL_REVIEW_PASSED", "RESULT_OWNER_ACCEPTED", "CONDITIONAL", "chain",
+     "forbiddenWhen", "без evidence"),
+    ("EVIDENCE_READY", "NEXT_WORK_ITEM_LOCKED", "FORBIDDEN", None, None, None),
+    ("RESULT_OWNER_ACCEPTED", "RELEASE_AUTHORIZED", "FORBIDDEN", None, None, None),
+    ("INTAKE", "BUILDING", "FORBIDDEN", "skip", None, None),
+    ("BUILDING", "TECHNICAL_REVIEW_PASSED", "FORBIDDEN", "skip", None, None),
+    ("POST_ACCEPTANCE_CHECKPOINT_VERIFIED", "RELEASED", "FORBIDDEN", "skip", None, None),
+    ("BUILDING", "STOPPED", "VALID", "emergency", None, None),
+    ("BUILDING", "ROLLED_BACK", "CONDITIONAL", "emergency",
+     "requiresState", "ANY_MUTATED_STATE"),
+    ("EVIDENCE_READY", "INCONCLUSIVE", "CONDITIONAL", "emergency",
+     "requiresState", "INSUFFICIENT_EVIDENCE"),
+    ("TRIAGE", "STOPPED_PROTOCOL_MISMATCH", "CONDITIONAL", "emergency",
+     "requiresState", "PROTOCOL_MISMATCH"),
+    ("BUILDING", "TRIAGE", "UNKNOWN", None, None, None),
+    ("BUILDNG", "ROLLED_BACK", "UNKNOWN", None, None, None),
+    ("", "ROLLED_BACK", "UNKNOWN", None, None, None),
+])
+def test_validate_transition_follows_docs16(repo, load_server, fr, to, verdict, kind, field, value):
+    res = load_server(repo).validate_transition(fr, to)
+    assert res["verdict"] == verdict
+    assert res.get("kind") == kind
+    if field:
+        assert res.get(field) == value
+
+
+SYNTH16 = """# 16. State machine
+
+```text
+A
+  -> B
+  -> C
+  -> D
+```
+
+## Недопустимые переходы
+
+```text
+A -> B # комментарий, не условие
+B -> C (без ревью) # пояснение
+C -> D (без проверки)
+C -> D
+```
+
+## Аварийные
+
+```text
+ANY_STATE -> STOPPED
+ANY_STATE -> PAUSED (только по решению владельца)
+```
+"""
+
+
+@pytest.mark.parametrize("fr, to, verdict, field, value", [
+    ("A", "B", "FORBIDDEN", None, None),  # комментарий — не условие
+    ("B", "C", "CONDITIONAL", "forbiddenWhen", "без ревью"),
+    ("C", "D", "FORBIDDEN", None, None),  # безусловный запрет сильнее условного
+    ("D", "STOPPED", "VALID", None, None),
+    ("D", "PAUSED", "CONDITIONAL", "allowedWhen", "только по решению владельца"),
+])
+def test_validate_transition_reads_conditions_and_comments(repo, load_server, fr, to, verdict, field, value):
+    (repo / "docs" / "16_STATE_MACHINE.md").write_text(SYNTH16, encoding="utf-8", newline="\n")
+    res = load_server(repo).validate_transition(fr, to)
+    assert res["verdict"] == verdict
+    if field:
+        assert res.get(field) == value

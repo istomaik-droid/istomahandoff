@@ -8,11 +8,17 @@
   5. State-подобные токены (UPPER_SNAKE) — известны (warning, если нет).
   6. docs/INDEX.md покрывает все docs/NN_*.md и не ссылается на
      несуществующие (docs/48).
+  7. Записи docs/10: все внутри блока «## Записи»; DEC-ID вида DEC-NNNN
+     (мандат — запись DEC с type: MANDATE, номер MANDATE-XXXX — в тексте),
+     уникальны и растут; type из enum схемы; у ACCEPTANCE/RELEASE — sha256
+     в evidenceReadHash (правило 6); expiresAt — существующая дата ISO8601;
+     дата раньше предыдущей — warning (история не правится).
 
 Запуск: python tools/protocol_lint.py   (из корня репозитория протокола)
 """
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +52,10 @@ STATE_SUFFIXES = ("_READY", "_ACCEPTED", "_VERIFIED", "_AUTHORIZED",
 
 DEC_REQUIRED = ["id:", "date:", "owner:", "type:", "scope:", "decision:",
                 "allowed:", "forbidden:"]
+
+ISO_DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?)?")
+SHA256_RE = re.compile(r"[0-9a-fA-F]{64}")
 
 errors, warnings = [], []
 
@@ -117,6 +127,87 @@ def check_decisions():
                 errors.append(f"docs/10: DEC {dec_id} — нет поля {field}")
 
 
+def _record_fields(chunk):
+    """Скалярные поля записи — как их читает сервер (_parse_decisions):
+    строка продолжения с отступом приклеивается к значению через пробел."""
+    fields, key = {}, None
+    for line in chunk.splitlines()[1:]:
+        m = re.match(r"^  (\w+):[ \t]*(.*)$", line)
+        if m:
+            key, fields[m.group(1)] = m.group(1), m.group(2).strip()
+        elif re.match(r"^    - ", line):
+            key = None  # пункт списка allowed/forbidden
+        elif key and line.strip():
+            fields[key] = (fields[key] + " " + line.strip()).strip()
+    return fields
+
+
+def _valid_date(value):
+    """ISO8601, который увидит list_expired сервера (разбор value[:19])."""
+    if not ISO_DATE_RE.fullmatch(value):
+        return False
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            datetime.strptime(value[:19], fmt)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def check_decision_records():
+    p = ROOT / "docs" / "10_DECISION_LOG.md"
+    if not p.exists():
+        return  # отсутствие файла сообщает check_decisions
+    text = p.read_text(encoding="utf-8")
+    block = re.search(r"(?ms)^## Записи\s*\n+```yaml\n(.*?)^```", text)
+    if not block:
+        errors.append("docs/10: не найден yaml-блок секции «## Записи»")
+        return
+    # enum типов — только из схемы (до «## Записи»), не из первой записи
+    schema = re.search(r"(?m)^\s+type:\s*([A-Z0-9_]+(?:\s*\|\s*[A-Z0-9_]+)+)\s*$",
+                       text[:block.start()])
+    if not schema:
+        errors.append("docs/10: в схеме не найден enum типов (type: A | B | …)")
+    types = {t.strip() for t in schema.group(1).split("|")} if schema else set()
+    outside = text[:block.start(1)] + text[block.end(1):]
+    for m in re.finditer(r"(?m)^- id: (DEC-\d+)", outside):
+        errors.append(f"docs/10: {m.group(1)} — запись вне блока «## Записи»: "
+                      "сервер её не видит")
+    seen, last_num, last_date = set(), 0, ""
+    for chunk in re.split(r"(?m)^- id: ", block.group(1))[1:]:
+        dec_id = chunk.splitlines()[0].strip()
+        fields = _record_fields(chunk)
+        m = re.fullmatch(r"DEC-(\d{4})", dec_id)
+        if not m:
+            errors.append(f"docs/10: {dec_id} — id не в формате DEC-NNNN")
+            continue
+        num = int(m.group(1))
+        if dec_id in seen:
+            errors.append(f"docs/10: {dec_id} — повтор DEC-ID")
+        elif num <= last_num:
+            errors.append(f"docs/10: {dec_id} стоит после DEC-{last_num:04d} — "
+                          "номера должны расти")
+        seen.add(dec_id)
+        last_num = max(last_num, num)
+        type_ = fields.get("type", "").strip()
+        if types and type_ not in types:
+            errors.append(f"docs/10: {dec_id} — type {type_!r} не из схемы")
+        if type_ in ("ACCEPTANCE", "RELEASE") and not SHA256_RE.fullmatch(
+                fields.get("evidenceReadHash", "").strip()):
+            errors.append(f"docs/10: {dec_id} — {type_} без sha256 в "
+                          "evidenceReadHash (правило 6)")
+        expires = fields.get("expiresAt", "").strip()
+        if expires not in ("", "null") and not _valid_date(expires):
+            errors.append(f"docs/10: {dec_id} — expiresAt {expires!r} не "
+                          "ISO8601 или такой даты нет")
+        date = fields.get("date", "").strip()
+        if date and last_date and date < last_date:
+            warnings.append(f"docs/10: {dec_id} — дата {date} раньше "
+                            f"предыдущей записи ({last_date})")
+        last_date = max(last_date, date)
+
+
 def check_stop_conditions():
     p = ROOT / "docs" / "33_STOP_CONDITIONS.md"
     if not p.exists():
@@ -159,6 +250,7 @@ def main():
             check_states(p, text)
     check_state_enum()
     check_decisions()
+    check_decision_records()
     check_stop_conditions()
     check_index()
     check_skills()
