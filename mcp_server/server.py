@@ -170,12 +170,14 @@ def _parse_state_machine() -> dict:
     arrow_re = re.compile(r"^(\S+)\s*->\s*(\S+)\s*(?:\((.*?)\))?\s*(?:#(.*))?$")
 
     def parse_arrows(block: str) -> list[dict]:
+        # «(…)» — условие перехода, «# …» — комментарий
         out = []
         for line in block.splitlines():
             m = arrow_re.match(line.strip())
             if m:
-                note = " ".join(x for x in (m.group(3), m.group(4)) if x)
-                out.append({"from": m.group(1), "to": m.group(2), "note": note})
+                out.append({"from": m.group(1), "to": m.group(2),
+                            "condition": (m.group(3) or "").strip(),
+                            "note": (m.group(4) or "").strip()})
         return out
 
     return {
@@ -346,8 +348,9 @@ def record_decision(
     else:
         git = {"autosync": False, "committed": False, "pushed": False,
                "note": "запись в рабочем дереве: закоммитьте её вместе с "
-                       "изменением (авто-синхронизация — ISTOMAHANDOFF_AUTOSYNC=1, "
-                       "DEC-0016)"}
+                       "изменением; если следом нужен checkpoint (BOUNDARY перед "
+                       "pre-change) — отдельным коммитом до checkpoint_create "
+                       "(авто-синхронизация — ISTOMAHANDOFF_AUTOSYNC=1, DEC-0016)"}
     return {"id": dec_id, "date": dt.date.today().isoformat(), "type": type,
             "repo": _repo_root() or ROOT.as_posix(),
             "log": log_path.as_posix(), "git": git}
@@ -520,28 +523,67 @@ def evidence_hash(path: str) -> dict:
 
 @mcp.tool()
 def validate_transition(from_state: str, to_state: str) -> dict:
-    """Проверка перехода state machine по docs/16 (файл — источник истины)."""
+    """Проверка перехода state machine по docs/16 (файл — источник истины).
+
+    VALID — шаг цепочки или аварийный переход из ANY_STATE; FORBIDDEN —
+    недопустимый переход или прыжок через стадии цепочки (docs/33 п.21);
+    UNKNOWN — переход в docs/16 не описан. CONDITIONAL: при kind=chain шаг
+    недопустим, если выполняется forbiddenWhen (условие запрета docs/16);
+    при kind=emergency переход допустим, только если текущее состояние
+    подпадает под requiresState и/или выполнено allowedWhen.
+    """
     sm = _parse_state_machine()
     fr, to = from_state.strip(), to_state.strip()
+    states = sm["states"]
+    rules = [f for f in sm["forbidden"] if f["from"] == fr and f["to"] == to]
 
-    for f in sm["forbidden"]:
-        if f["from"] == fr and f["to"] == to:
-            return {
-                "verdict": "FORBIDDEN",
-                "reason": f"недопустимый переход по docs/16"
-                          + (f": {f['note']}" if f["note"] else ""),
-            }
     if (fr, to) in sm["chain"]:
-        return {"verdict": "VALID", "kind": "chain",
-                "reason": "последовательный переход канонической цепочки docs/16"}
+        if rules and all(f["condition"] for f in rules):
+            # запрет с условием на шаге цепочки — это условие самого шага
+            conds = "; ".join(f["condition"] for f in rules)
+            return {"verdict": "CONDITIONAL", "kind": "chain",
+                    "forbiddenWhen": conds,
+                    "reason": f"шаг цепочки docs/16 недопустим, если: {conds}"}
+        if not rules:
+            return {"verdict": "VALID", "kind": "chain",
+                    "reason": "последовательный переход канонической цепочки docs/16"}
+    if rules:
+        why = "; ".join(f["condition"] or f["note"] for f in rules
+                        if f["condition"] or f["note"])
+        return {"verdict": "FORBIDDEN",
+                "reason": "недопустимый переход по docs/16"
+                          + (f": {why}" if why else "")}
+    known = set(states) | {e["to"] for e in sm["emergency"]}
     for e in sm["emergency"]:
-        if e["to"] == to and (e["from"] == "ANY_STATE" or e["from"] == fr):
-            return {
-                "verdict": "VALID", "kind": "emergency",
-                "reason": f"аварийный переход по docs/16 ({e['from']} -> {e['to']})"
-                          + (f": {e['note']}" if e["note"] else ""),
-            }
-    known = set(sm["states"])
+        if e["to"] != to:
+            continue
+        note = f": {e['note']}" if e["note"] else ""
+        if e["from"] in ("ANY_STATE", fr):
+            if e["condition"]:
+                return {"verdict": "CONDITIONAL", "kind": "emergency",
+                        "allowedWhen": e["condition"],
+                        "reason": f"аварийный переход по docs/16 "
+                                  f"({e['from']} -> {e['to']}) — только если: "
+                                  f"{e['condition']}{note}"}
+            return {"verdict": "VALID", "kind": "emergency",
+                    "reason": f"аварийный переход по docs/16 "
+                              f"({e['from']} -> {e['to']}){note}"}
+        if fr not in known:
+            continue  # опечатка или чужое состояние — ниже UNKNOWN с подсказкой
+        # обобщённый источник (ANY_MUTATED_STATE и т.п.)
+        res = {"verdict": "CONDITIONAL", "kind": "emergency",
+               "requiresState": e["from"],
+               "reason": f"аварийный переход по docs/16 ({e['from']} -> "
+                         f"{e['to']}) — только если текущее состояние "
+                         f"подпадает под {e['from']}{note}"}
+        if e["condition"]:
+            res["allowedWhen"] = e["condition"]
+        return res
+    if fr in states and to in states and states.index(to) > states.index(fr) + 1:
+        return {"verdict": "FORBIDDEN", "kind": "skip",
+                "reason": f"прыжок через стадии цепочки docs/16 — stop "
+                          f"condition (docs/33 п.21), нужен отдельный DEC"}
+    known = set(states)
     hint = ""
     if fr not in known:
         hint = f"; состояние {fr} не входит в каноническую цепочку"
@@ -648,9 +690,55 @@ def _repo_root() -> str | None:
     return out or None
 
 
+def _status_entries() -> list[tuple[str, str]]:
+    """(XY, путь) по `git status -z`: пути относительно корня репозитория,
+    без экранирования (кириллица, пробелы), файлы внутри новых каталогов
+    перечислены поштучно, у переименования — оба пути."""
+    proc = _git(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+    if proc.returncode != 0:
+        raise ValueError(f"git status не выполнен: {proc.stderr.strip()}")
+    recs = proc.stdout.split("\0")
+    out, i = [], 0
+    while i < len(recs):
+        rec = recs[i]
+        i += 1
+        if len(rec) < 4:
+            continue
+        out.append((rec[:2], rec[3:]))
+        if "R" in rec[:2] or "C" in rec[:2]:
+            # в формате -z за новым путём следует исходный
+            if i < len(recs) and recs[i]:
+                out.append((rec[:2], recs[i]))
+            i += 1
+    return out
+
+
+_LIST_CAP = 200  # длинные списки путей в ответах гейтов обрезаются, счётчик — полный
+
+
+def _norm_path(path: str, root: str | None) -> str:
+    """own_files к виду путей git status: «/», без «./», относительно корня."""
+    p = path.replace("\\", "/")
+    if root and Path(p).is_absolute():
+        try:
+            p = Path(p).resolve().relative_to(Path(root).resolve()).as_posix()
+        except ValueError:
+            pass
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
+
 @mcp.tool(meta=_HUMAN_CONFIRM)
 def checkpoint_create(label: str = "") -> dict:
-    """Git-tag checkpoint/<YYYYMMDD-HHMMSS>[-label] с readback (docs/19)."""
+    """Git-tag checkpoint/<YYYYMMDD-HHMMSS>[-label] с readback (docs/19).
+
+    Отказ, если у отслеживаемых файлов есть незакоммиченные изменения: тег
+    фиксирует HEAD, и checkpoint не совпал бы с рабочим деревом (запись
+    решения в docs/10 коммитится до checkpoint). Неотслеживаемые файлы
+    перечисляются в ответе. Тег annotated — нужны git user.name и
+    user.email; тег только локальный (push не выполняется).
+    """
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     tag = f"checkpoint/{stamp}"
     if label:
@@ -660,16 +748,34 @@ def checkpoint_create(label: str = "") -> dict:
                              "(допустимо [a-z0-9-])")
         tag += f"-{safe}"
 
-    proc = _git(["tag", tag])
+    if _git(["var", "GIT_COMMITTER_IDENT"]).returncode != 0:
+        raise ValueError("git identity не задана: annotated tag требует "
+                         "user.name и user.email — задайте их в этом "
+                         "репозитории (git config user.name / user.email); "
+                         "глобальный конфиг без решения владельца не менять")
+    entries = _status_entries()
+    dirty = [p for xy, p in entries if xy != "??"]
+    if dirty:
+        log_in_repo = _git(["rev-parse", "--show-prefix"]).stdout.strip() + LOG_REL
+        hint = (" — запись решения в docs/10 закоммитьте отдельным коммитом "
+                "до checkpoint" if log_in_repo in dirty else "")
+        raise ValueError("незакоммиченные изменения отслеживаемых файлов — "
+                         "checkpoint зафиксировал бы не то состояние: "
+                         + ", ".join(dirty[:20]) + hint)
+    untracked = [p for xy, p in entries if xy == "??"]
+
+    proc = _git(["tag", "-a", "-m", f"checkpoint {stamp} {label}".strip(), tag])
     if proc.returncode != 0:
         raise ValueError(f"git tag {tag} не создан: {proc.stderr.strip()}")
 
-    # readback: перечитать tag и сверить с HEAD
+    # readback: перечитать tag и сверить коммит, на который он указывает, с HEAD
     head = _git(["rev-parse", "HEAD"]).stdout.strip()
-    back = _git(["rev-parse", tag]).stdout.strip()
+    back = _git(["rev-parse", f"{tag}^{{commit}}"]).stdout.strip()
     verified = bool(head) and head == back
     result = {"tag": tag, "sha": back, "verified": verified,
-              "repo": _repo_root()}
+              "repo": _repo_root(), "pushed": False,
+              "untracked": untracked[:_LIST_CAP],
+              "untrackedCount": len(untracked)}
     if not verified:
         result["note"] = (f"READBACK НЕ СОШЁЛСЯ: HEAD={head}, "
                           f"tag={back} — checkpoint не считается созданным")
@@ -678,12 +784,14 @@ def checkpoint_create(label: str = "") -> dict:
 
 @mcp.tool()
 def pre_deploy_check(own_files: list[str] | None = None) -> dict:
-    """Pre-deploy gate чистого дерева (docs/38): задеплоенное = закоммиченное."""
-    own = {p.replace("\\", "/") for p in (own_files or [])}
-    proc = _git(["status", "--porcelain"])
-    if proc.returncode != 0:
-        raise ValueError(f"git status не выполнен: {proc.stderr.strip()}")
-    changed = [line[3:].strip() for line in proc.stdout.splitlines() if line]
+    """Pre-deploy gate чистого дерева (docs/38): задеплоенное = закоммиченное.
+
+    own_files — пути относительно корня репозитория (поле repo ответа);
+    каталог в own_files не покрывает файлы внутри него.
+    """
+    root = _repo_root()
+    own = {_norm_path(p, root) for p in (own_files or [])}
+    changed = list(dict.fromkeys(p for _, p in _status_entries()))
     foreign = [p for p in changed if p not in own]
     if not changed:
         verdict = "CLEAN"
@@ -698,8 +806,11 @@ def pre_deploy_check(own_files: list[str] | None = None) -> dict:
         "DIRTY_FOREIGN": "STOP (docs/38): в дереве файлы не из own_files — "
                          "чужие незакоммиченные изменения, деплой запрещён",
     }[verdict]
-    return {"verdict": verdict, "changed": changed, "foreign": foreign,
-            "note": note, "repo": _repo_root(),
+    return {"verdict": verdict,
+            "changed": changed[:_LIST_CAP], "changedCount": len(changed),
+            "foreign": foreign[:_LIST_CAP], "foreignCount": len(foreign),
+            "truncated": len(changed) > _LIST_CAP,
+            "note": note, "repo": root,
             "head": _git(["rev-parse", "--verify", "--quiet", "HEAD"]).stdout.strip()
             or None}
 
