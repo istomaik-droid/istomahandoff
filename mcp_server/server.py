@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -30,6 +31,17 @@ mcp = FastMCP(
     host=os.environ.get("MCP_HOST", "127.0.0.1"),
     port=int(os.environ.get("MCP_PORT", "8000")),
 )
+
+# Интерактивный Claude Code спрашивает человека на каждый вызов tool с этим
+# флагом, даже в режимах auto/bypass; в dontAsk вызов отклоняется, в
+# приложениях на Agent SDK решает их canUseTool; другие рантаймы флаг
+# игнорируют. Это не доказательство участия владельца.
+_HUMAN_CONFIRM = {"anthropic/requiresUserInteraction": True}
+
+LOG_REL = "docs/10_DECISION_LOG.md"
+# Таймаут только для сетевых git-операций: убитый посреди коммит оставил бы
+# .git/index.lock. На Windows таймаут не обрывает дочерние процессы git.
+_NET_TIMEOUT = 60
 
 # ---------------------------------------------------------------------------
 # Чтение канона
@@ -197,7 +209,35 @@ def protocol_lint() -> dict:
     }
 
 
-@mcp.tool()
+_SHA256_RE = re.compile(r"[0-9a-fA-F]{64}")
+_MANDATE_RE = re.compile(r"MANDATE-\d{4}")
+_ISO_DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?)?")
+
+
+def _single_line(field: str, value: str) -> None:
+    """Поле пишется одной видимой строкой yaml-блока docs/10: перевод строки
+    или управляющий символ дописал бы в журнал вторую, поддельную запись, а
+    невидимые символы форматирования (bidi, zero-width) прячут смысл текста."""
+    bad = [c for c in value
+           if unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp")]
+    if bad:
+        raise ValueError(f"{field}: недопустимый символ {bad[0]!r} — значение "
+                         "записывается одной видимой строкой (docs/10)")
+
+
+def _blank(value: str | None) -> bool:
+    """Пусто для _parse_decisions: пробелы, «null», «[]» — нет значения."""
+    return value is None or value.strip() in ("", "null", "[]")
+
+
+def _autosync_enabled() -> bool:
+    """Авто commit+push журнала — только у единственного писателя (DEC-0016)."""
+    return os.environ.get("ISTOMAHANDOFF_AUTOSYNC", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+@mcp.tool(meta=_HUMAN_CONFIRM)
 def record_decision(
     type: str,
     decision: str,
@@ -212,7 +252,10 @@ def record_decision(
     """Записать решение владельца в docs/10 (секция «## Записи»).
 
     DEC-ID назначается автоматически. ACCEPTANCE/RELEASE без
-    evidenceReadHash отклоняются (docs/10, правило 6).
+    evidenceReadHash отклоняются (docs/10, правило 6). owner — «OWNER»
+    или имя deputy (тогда обязателен mandateRef). По умолчанию запись
+    остаётся в рабочем дереве; авто commit+push — только при
+    ISTOMAHANDOFF_AUTOSYNC=1 у единственного писателя журнала (DEC-0016).
     """
     types = _dec_types()
     if type not in types:
@@ -220,18 +263,52 @@ def record_decision(
             f"неизвестный type {type!r}; допустимые (из docs/10): "
             + ", ".join(sorted(types))
         )
+    for field, value in (("decision", decision), ("scope", scope),
+                         ("owner", owner),
+                         ("evidenceReadHash", evidenceReadHash or ""),
+                         ("mandateRef", mandateRef or ""),
+                         ("expiresAt", expiresAt or "")):
+        _single_line(field, value)
+    for field, items in (("allowed", allowed), ("forbidden", forbidden)):
+        for item in items:
+            _single_line(field, item)
+            if _blank(item):
+                raise ValueError(f"{field}: пустой пункт (docs/10)")
+    for field, value in (("decision", decision), ("owner", owner)):
+        if _blank(value):
+            raise ValueError(f"{field}: пустое значение (docs/10)")
     if type in ("ACCEPTANCE", "RELEASE") and not evidenceReadHash:
         raise ValueError(
             f"{type} без evidenceReadHash невалиден (docs/10, правило 6): "
-            "владелец обязан зафиксировать хэш прочитанного evidence. "
-            "Сначала получите хэш через evidence_hash(path)."
+            "хэш присылает владелец — он сам открывает evidence и сообщает "
+            "его sha256 (docs/46); агент не подставляет хэш, посчитанный им самим."
         )
-    if not scope:
+    if evidenceReadHash and not _SHA256_RE.fullmatch(evidenceReadHash):
+        raise ValueError("evidenceReadHash: ожидается sha256 прочитанного "
+                         "evidence — 64 hex-символа (docs/10)")
+    if expiresAt and not (_ISO_DATE_RE.fullmatch(expiresAt)
+                          and _parse_date(expiresAt)):
+        raise ValueError(f"expiresAt {expiresAt!r} не распознан: ожидается "
+                         "YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS[±HH:MM] (иначе "
+                         "list_expired его не увидит)")
+    if owner != "OWNER" and _blank(mandateRef):
+        raise ValueError("решение deputy без mandateRef недействительно "
+                         "(docs/10: поле mandateRef; docs/46 п.7); "
+                         "владелец пишется как owner=OWNER")
+    if mandateRef and not _MANDATE_RE.fullmatch(mandateRef):
+        raise ValueError(f"mandateRef {mandateRef!r}: ожидается MANDATE-XXXX "
+                         "(docs/46)")
+    if _blank(scope):
         raise ValueError("решение без scope не действительно (docs/10)")
     if not allowed or not forbidden:
         raise ValueError("решение без allowed/forbidden не действительно (docs/10)")
 
-    log_path = ROOT / "docs" / "10_DECISION_LOG.md"
+    sync = _autosync_enabled()
+    upstream = fetched = None
+    if sync:
+        upstream, fetched = _prepare_sync()
+
+    log_path = ROOT / LOG_REL
     text = _read_decision_log()
     nums = [int(n) for n in
             re.findall(r"(?m)^- id: DEC-(\d{4})\b", _records_block(text))]
@@ -261,40 +338,160 @@ def record_decision(
         raise ValueError("docs/10: не найден yaml-блок секции «## Записи»")
     new_text = text[:m.start(2)] + m.group(2) + entry + text[m.end(2):]
 
-    # атомарная запись: temp file + rename
-    fd, tmp = tempfile.mkstemp(dir=log_path.parent, suffix=".tmp")
+    original = log_path.read_bytes()
+    _atomic_write(log_path, new_text.encode("utf-8"))
+
+    if sync:
+        git = _sync_decision_log(dec_id, upstream, fetched, original)
+    else:
+        git = {"autosync": False, "committed": False, "pushed": False,
+               "note": "запись в рабочем дереве: закоммитьте её вместе с "
+                       "изменением (авто-синхронизация — ISTOMAHANDOFF_AUTOSYNC=1, "
+                       "DEC-0016)"}
+    return {"id": dec_id, "date": dt.date.today().isoformat(), "type": type,
+            "repo": _repo_root() or ROOT.as_posix(),
+            "log": log_path.as_posix(), "git": git}
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    """Атомарная запись: temp file + rename."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(new_text)
-        os.replace(tmp, log_path)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
     except BaseException:
         os.unlink(tmp)
         raise
 
-    git = _sync_decision_log(dec_id, type)
-    return {"id": dec_id, "date": dt.date.today().isoformat(),
-            "type": type, "git": git}
+
+def _upstream() -> dict | None:
+    """Upstream текущей ветки: remote и ветка назначения для push."""
+    branch = _git(["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout.strip()
+    if not branch:
+        return None
+    remote = _git(["config", "--get", f"branch.{branch}.remote"]).stdout.strip()
+    merge = _git(["config", "--get", f"branch.{branch}.merge"]).stdout.strip()
+    if not remote or remote == "." or not merge:
+        return None
+    return {"remote": remote, "merge": merge}
 
 
-def _sync_decision_log(dec_id: str, type_: str) -> dict:
-    """Авто commit+push docs/10 после записи решения (DEC-0011).
+def _rev_count(rev_range: str) -> int:
+    out = _git(["rev-list", "--count", rev_range]).stdout.strip()
+    return int(out) if out.isdigit() else -1
 
-    Только docs/10; push — best effort: при недоступности GitHub решение
-    остаётся закоммиченным локально, pushed=false.
+
+def _prepare_sync() -> tuple[dict | None, bool | None]:
+    """Проверки до записи при авто-синхронизации (DEC-0016).
+
+    Отказ, если в docs/10 есть незакоммиченные правки (авто-коммит забрал бы
+    их вместе с решением) или клон отстаёт от upstream (DEC-ID мог быть уже
+    занят). Возвращает (upstream, fetch удался).
     """
-    rel = "docs/10_DECISION_LOG.md"
-    if _git(["add", rel]).returncode != 0:
-        return {"committed": False, "pushed": False, "error": "git add failed"}
+    if _git(["symbolic-ref", "--quiet", "HEAD"]).returncode != 0:
+        raise ValueError("HEAD не на ветке (checkout коммита/тега или идёт "
+                         "rebase) — авто-коммит ушёл бы мимо ветки; решение "
+                         "не записано")
+    st = _git(["status", "--porcelain", "--", LOG_REL])
+    if st.returncode != 0:
+        raise ValueError(f"git status не выполнен: {st.stderr.strip()}")
+    if st.stdout.strip():
+        raise ValueError("в docs/10 есть незакоммиченные правки — авто-коммит "
+                         "забрал бы их вместе с решением; решение не записано")
+    upstream = _upstream()
+    if upstream is None:
+        return None, None
+    fetched = _git(["fetch", "--quiet", upstream["remote"]],
+                   timeout=_NET_TIMEOUT).returncode == 0
+    if fetched:
+        if _git(["rev-parse", "--verify", "--quiet", "@{u}"]).returncode != 0:
+            raise ValueError("upstream-ветка не найдена (удалена на remote или "
+                             "ещё не создана) — проверьте git branch -vv; "
+                             "решение не записано")
+        behind = _rev_count("HEAD..@{u}")
+        if behind and _rev_count("@{u}..HEAD") > 0:
+            raise ValueError("ветка разошлась с upstream — выполните git pull "
+                             "--rebase; решение не записано")
+        if behind:
+            raise ValueError(f"клон отстаёт от upstream на {behind} коммит(ов) — "
+                             "DEC-ID мог быть уже занят; выполните git pull "
+                             "--ff-only; решение не записано")
+    return upstream, fetched
+
+
+_OWN_COMMIT_RE = re.compile(r"Запиши DEC-\d{4} \(auto, MCP record_decision\)")
+
+
+def _commit_files(rev: str) -> list[str]:
+    out = _git(["-c", "core.quotePath=false", "diff-tree", "--root",
+                "--no-commit-id", "--name-only", "-r", rev]).stdout
+    return [line for line in out.splitlines() if line]
+
+
+def _is_own_decision_commit(rev: str, log_in_repo: str) -> bool:
+    """Коммит решения, сделанный сервером: своё сообщение и только docs/10."""
+    subject = _git(["log", "-1", "--format=%s", rev]).stdout.strip()
+    return bool(_OWN_COMMIT_RE.fullmatch(subject)) and \
+        _commit_files(rev) == [log_in_repo]
+
+
+def _sync_decision_log(dec_id: str, upstream: dict | None,
+                       fetched: bool | None, original: bytes) -> dict:
+    """Авто commit+push docs/10 (DEC-0011 в границах DEC-0016).
+
+    Коммитит только docs/10; при сбое коммита запись откатывается. Push —
+    только если в коммите решения нет других файлов и среди неотправленных
+    коммитов ветки нет чужих (свои решения после прошлого сбоя досылаются).
+    """
     c = _git(["commit", "-m", f"Запиши {dec_id} (auto, MCP record_decision)",
-              "--", rel])
+              "--", LOG_REL])
     if c.returncode != 0:
-        return {"committed": False, "pushed": False,
-                "error": c.stderr.strip() or "git commit failed"}
-    p = _git(["push"])
-    out = {"committed": True, "pushed": p.returncode == 0}
+        _atomic_write(ROOT / LOG_REL, original)
+        _git(["reset", "-q", "--", LOG_REL])
+        raise ValueError("git commit не удался, запись откатена — решение НЕ "
+                         "записано: " + (c.stderr.strip() or c.stdout.strip()
+                                         or "git commit failed"))
+    out = {"autosync": True, "committed": True, "pushed": False}
+    log_in_repo = _git(["rev-parse", "--show-prefix"]).stdout.strip() + LOG_REL
+    files = _commit_files("HEAD")
+    if files != [log_in_repo]:
+        out.update(reason="COMMIT_NOT_ONLY_LOG", files=files,
+                   note="в коммит решения попали другие файлы (pre-commit "
+                        "хук?) — push пропущен; разберите коммит вручную")
+        return out
+    if upstream is None:
+        out.update(reason="NO_UPSTREAM",
+                   note="у ветки нет upstream — push не выполнялся")
+        return out
+    if not fetched:
+        out.update(reason="FETCH_FAILED",
+                   note="git fetch не удался: DEC-ID не сверен с upstream, push "
+                        "пропущен. Когда remote станет доступен — git pull "
+                        "--rebase; при конфликте в docs/10 этот DEC-ID уже "
+                        "занят: перенумеруйте запись и выполните git push")
+        return out
+    pending = _git(["rev-list", "--reverse", "@{u}..HEAD"]).stdout.split()
+    foreign = [r for r in pending[:-1]
+               if not _is_own_decision_commit(r, log_in_repo)]
+    if not pending or foreign:
+        extra = [_git(["log", "-1", "--format=%h %s", r]).stdout.strip()
+                 for r in foreign]
+        out.update(reason="EXTRA_COMMITS", extraCommits=extra,
+                   note="в ветке есть другие неотправленные коммиты — push "
+                        "пропущен, чтобы не опубликовать их вместе с решением")
+        return out
+    p = _git(["push", upstream["remote"], f"HEAD:{upstream['merge']}"],
+             timeout=_NET_TIMEOUT)
     if p.returncode != 0:
-        out["error"] = p.stderr.strip() or "git push failed"
-        out["note"] = "решение закоммичено локально; выполните git push позже"
+        out.update(reason="PUSH_FAILED", error=p.stderr.strip() or "git push failed",
+                   note="решение закоммичено локально; следующий вызов "
+                        "record_decision отправит его вместе с новым "
+                        "(или выполните git push)")
+        return out
+    out["pushed"] = True
+    if len(pending) > 1:
+        out["pushedCommits"] = len(pending)
     return out
 
 
@@ -306,7 +503,10 @@ def get_active_state() -> str:
 
 @mcp.tool()
 def evidence_hash(path: str) -> dict:
-    """sha256 файла; путь обязан резолвиться внутри корня репозитория."""
+    """sha256 файла; путь обязан резолвиться внутри корня репозитория.
+
+    Для evidenceReadHash хэш сообщает владелец, прочитав evidence (docs/46).
+    """
     p = (ROOT / path).resolve()
     if not p.is_relative_to(ROOT):
         raise ValueError(f"путь выходит за пределы репозитория: {path}")
@@ -424,17 +624,31 @@ def protocol_version() -> dict:
             "source": "docs/42_MAINTENANCE.md"}
 
 
-def _git(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        # DEVNULL: иначе дочерний процесс наследует stdin-канал MCP и
-        # subprocess.run зависает (Windows)
-        stdin=subprocess.DEVNULL,
-    )
+def _git(args: list[str], timeout: int | None = None) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            # DEVNULL: иначе дочерний процесс наследует stdin-канал MCP и
+            # subprocess.run зависает (Windows)
+            stdin=subprocess.DEVNULL, timeout=timeout,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            ["git", *args], 124, "", f"git {args[0]}: таймаут {timeout} с")
+    except OSError as e:
+        return subprocess.CompletedProcess(
+            ["git", *args], 127, "", f"git не запущен: {e}")
 
 
-@mcp.tool()
+def _repo_root() -> str | None:
+    """Корень git-репозитория, в котором работают git-tools сервера."""
+    out = _git(["rev-parse", "--show-toplevel"]).stdout.strip()
+    return out or None
+
+
+@mcp.tool(meta=_HUMAN_CONFIRM)
 def checkpoint_create(label: str = "") -> dict:
     """Git-tag checkpoint/<YYYYMMDD-HHMMSS>[-label] с readback (docs/19)."""
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -454,7 +668,8 @@ def checkpoint_create(label: str = "") -> dict:
     head = _git(["rev-parse", "HEAD"]).stdout.strip()
     back = _git(["rev-parse", tag]).stdout.strip()
     verified = bool(head) and head == back
-    result = {"tag": tag, "sha": back, "verified": verified}
+    result = {"tag": tag, "sha": back, "verified": verified,
+              "repo": _repo_root()}
     if not verified:
         result["note"] = (f"READBACK НЕ СОШЁЛСЯ: HEAD={head}, "
                           f"tag={back} — checkpoint не считается созданным")
@@ -484,7 +699,9 @@ def pre_deploy_check(own_files: list[str] | None = None) -> dict:
                          "чужие незакоммиченные изменения, деплой запрещён",
     }[verdict]
     return {"verdict": verdict, "changed": changed, "foreign": foreign,
-            "note": note}
+            "note": note, "repo": _repo_root(),
+            "head": _git(["rev-parse", "--verify", "--quiet", "HEAD"]).stdout.strip()
+            or None}
 
 
 if __name__ == "__main__":
