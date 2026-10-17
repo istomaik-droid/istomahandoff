@@ -1,4 +1,4 @@
-"""Общие фикстуры тестов: копии канона во временных каталогах.
+"""Общие фикстуры тестов: копия кита (канон) и отдельный экземпляр-проект.
 
 Свежий git init и локальный bare-remote вместо GitHub — реальный репозиторий
 и сеть не трогаются.
@@ -11,8 +11,10 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-CANON_DIRS = ("docs", "agents", "skills", "templates", "tools")
+KIT_DIRS = ("docs", "agents", "skills", "templates", "tools", "mcp_server", "adr")
+KIT_FILES = ("istomahandoff.md", "README.md", ".mcp.json.example")
 LOG = "docs/10_DECISION_LOG.md"
+STATE = "docs/09_ACTIVE_STATE.md"
 
 # Минимальный журнал: схема с enum типов, одна запись, раздел правил.
 LOG_FIXTURE = """# 10. Decision log
@@ -57,6 +59,9 @@ Append-only.
 
 1. Каждое решение имеет ID.
 """
+# Журнал экземпляра: та же схема, собственная запись DEC-0001.
+INSTANCE_LOG = LOG_FIXTURE.replace("decision: исходная запись",
+                                   "decision: исходная запись проекта")
 
 _GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
             "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX",
@@ -90,15 +95,62 @@ def configure(repo):
     git(repo, "config", "tag.gpgSign", "false")
 
 
-def copy_canon(dest):
-    for d in CANON_DIRS:
+def copy_kit(dest, fixture_log=False):
+    """Копия кита. fixture_log — заменить журнал кита минимальным (для lint
+    кита); иначе в копии остаются реальные записи кита DEC-0001…"""
+    for d in KIT_DIRS:
         shutil.copytree(REPO / d, dest / d,
                         ignore=shutil.ignore_patterns("__pycache__"))
+    for f in KIT_FILES:
+        shutil.copy2(REPO / f, dest / f)
     # LF, как на CI: результат не зависит от core.autocrlf машины
     for p in dest.rglob("*"):
         if p.is_file() and p.suffix in (".md", ".yaml", ".py"):
             p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n"))
-    (dest / LOG).write_text(LOG_FIXTURE, encoding="utf-8", newline="\n")
+    if fixture_log:
+        (dest / LOG).write_text(LOG_FIXTURE, encoding="utf-8", newline="\n")
+
+
+def commit_all(root, message="base"):
+    """git-репозиторий из каталога: init, identity теста, один коммит."""
+    git(root.parent, "init", "-q", "-b", "master", str(root))
+    configure(root)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", message)
+
+
+def make_instance(dest, kit):
+    """Экземпляр без файлов кита: docs/09 и docs/11 из шаблонов кита, журнал
+    с одной собственной записью (не равной записи журнала кита — иначе это
+    импорт), evidence/ и пара файлов проекта."""
+    (dest / "docs").mkdir(parents=True)
+    for rel in (STATE, "docs/11_HANDOFF_MEMO.md"):
+        shutil.copy2(kit / rel, dest / rel)
+    (dest / LOG).write_text(INSTANCE_LOG, encoding="utf-8", newline="\n")
+    (dest / "evidence").mkdir()
+    (dest / "evidence" / ".gitkeep").write_bytes(b"")
+    (dest / "src").mkdir()
+    (dest / "src" / "app.py").write_text("x = 1\n", encoding="utf-8", newline="\n")
+    (dest / "notes").mkdir()
+    (dest / "notes" / "ADR.md").write_text("# ADR\n", encoding="utf-8", newline="\n")
+
+
+def link_dir(link, target):
+    """Каталог-ссылка: junction на Windows (без прав администратора), symlink
+    на Linux."""
+    if os.name == "nt":
+        import _winapi
+        _winapi.CreateJunction(str(target), str(link))
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
+def tree_digest(root):
+    """Байты всех файлов каталога, включая .git, — для проверки «канон не
+    изменён» (кэш байткода не в счёт)."""
+    return {p.relative_to(root).as_posix(): p.read_bytes()
+            for p in sorted(root.rglob("*"))
+            if p.is_file() and "__pycache__" not in p.parts}
 
 
 def write_hook(git_dir, name, body):
@@ -109,13 +161,20 @@ def write_hook(git_dir, name, body):
 
 
 @pytest.fixture
-def repo(tmp_path):
+def kit(tmp_path):
+    """Установленный кит: отдельный git-клон (запись сверяет его ревизию)."""
+    root = tmp_path / "kit"
+    copy_kit(root)
+    commit_all(root, "kit")
+    return root
+
+
+@pytest.fixture
+def repo(tmp_path, kit):
+    """Экземпляр-проект: отдельный git-репозиторий без файлов кита."""
     root = tmp_path / "repo"
-    copy_canon(root)
-    git(tmp_path, "init", "-q", "-b", "master", str(root))
-    configure(root)
-    git(root, "add", "-A")
-    git(root, "commit", "-q", "-m", "base")
+    make_instance(root, kit)
+    commit_all(root)
     return root
 
 

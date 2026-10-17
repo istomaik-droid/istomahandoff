@@ -9,7 +9,8 @@
 3. Решение MIGRATION фиксируется в decision log: какой work item,
    с какой версии на какую, что изменилось в его границах.
 4. Агент обязан сверять protocol.version при каждом context recovery
-   (docs/34). Несовпадение — STOPPED_PROTOCOL_MISMATCH.
+   (docs/34). Несовпадение — STOPPED_PROTOCOL_MISMATCH, кроме minor-версии,
+   мигрирующей автоматически по правилу 5.
 5. Major-версия (несовместимые изменения) требует явного решения
    владельца для каждого in-flight item. Minor — может мигрировать
    автоматически, если не меняет state machine и главное правило.

@@ -13,8 +13,14 @@
 9. Пересчитать hashes.
 10. Сравнить server status, readiness, UI.
 11. Убедиться, что next stage locked.
-12. Сверить protocol.version и protocol.level с ACTIVE_STATE;
-    при несовпадении — STOPPED_PROTOCOL_MISMATCH до решения MIGRATION.
+12. Сверить protocol.version и protocol.level с ACTIVE_STATE (версию кита
+    против protocol.version проекта показывает tool protocol_version).
+    Кит новее в пределах того же major, и версии между ними (docs/42) не
+    меняют state machine и главное правило, — minor-миграция по docs/47
+    п.5, единственное исключение из п.1: агент обновляет protocol.version
+    в docs/09 (новый snapshot — в evidence/) и записывает событие
+    PROTOCOL_MIGRATED в docs/11. Сомнение в условии или иное
+    несовпадение — STOPPED_PROTOCOL_MISMATCH до решения MIGRATION.
 13. Только после совпадения — продолжение.
 
 Запрещено восстанавливать context только по памяти модели.

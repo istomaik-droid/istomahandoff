@@ -40,7 +40,8 @@ scope и allowed/forbidden. Спор о том, было ли решение, т
   code discipline, подключение рантаймов).
 - `skills/` — вызываемые процедуры протокола: preflight, decision, handoff,
   incident, verify.
-- `tools/` — protocol_lint.py: самопроверка согласованности протокола.
+- `tools/` — protocol_lint.py: самопроверка согласованности протокола и
+  экземпляра (`--project`); instance_init.py: файлы экземпляра в проекте.
 - `mcp_server/` — MCP-сервер протокола (resources/prompts/tools поверх
   канона); подключение — `.mcp.json.example` и agents/AGENT_RUNTIMES.md.
 - `evidence/` — место для receipts и snapshots.
@@ -48,10 +49,14 @@ scope и allowed/forbidden. Спор о том, было ли решение, т
 ## С чего начать
 
 1. Прочитать `istomahandoff.md` и `docs/44_ENFORCEMENT_LIMITS.md`.
-2. Заполнить `templates/PROJECT_PROFILE.yaml` (protocol, enforcement, deputy).
-3. Прочитать `agents/AGENT_CONTRACT.md`; подключение к рантайму
-   (Kimi Code / Claude Code / Codex) — `agents/AGENT_RUNTIMES.md`.
-4. Завести `docs/09_ACTIVE_STATE.md` и `docs/10_DECISION_LOG.md`.
+2. Установить кит — отдельный клон этого репозитория с `.venv`
+   (`agents/AGENT_RUNTIMES.md`, «Размещение»); в проекты канон не копируется.
+3. Создать экземпляр: `python <кит>/tools/instance_init.py <проект>`
+   (docs/09, docs/10, docs/11, evidence/, `templates/PROJECT_PROFILE.yaml`)
+   и заполнить в проекте профиль (protocol, enforcement, deputy).
+4. Прочитать `agents/AGENT_CONTRACT.md`; подключение к рантайму
+   (Kimi Code / Claude Code / Codex) — `agents/AGENT_RUNTIMES.md`,
+   `ISTOMAHANDOFF_PROJECT` — корень проекта.
 5. Назначить уровень enforcement не ниже E1 для любых задач от R2.
 6. Не начинать implementation без owner authorization.
 

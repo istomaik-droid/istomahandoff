@@ -30,7 +30,8 @@
 26. Enforcement level ниже требуемого для risk class.
 27. Решение ACCEPTANCE/RELEASE без evidenceReadHash.
 28. Решение deputy вне мандата или после expiry.
-29. Несовпадение protocol.version или protocol.level с ACTIVE_STATE (STOPPED_PROTOCOL_MISMATCH).
+29. Несовпадение protocol.version или protocol.level с ACTIVE_STATE (STOPPED_PROTOCOL_MISMATCH),
+    кроме minor-миграции по docs/47 п.5 (docs/34 п.12).
 30. Work item превысил лимит ходов (по умолчанию ~150; переопределяется
     в PROJECT_PROFILE) — резать: handoff новому агенту с чистым контекстом
     (docs/36).

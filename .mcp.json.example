@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "istomahandoff": {
-      "command": "python",
-      "args": ["mcp_server/server.py"],
-      "cwd": "c:/istomahandoff"
+      "command": "<КИТ>/.venv/Scripts/python.exe",
+      "args": ["<КИТ>/mcp_server/server.py"],
+      "env": {"ISTOMAHANDOFF_PROJECT": "<ПРОЕКТ>"}
     }
   }
 }

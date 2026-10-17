@@ -2,3 +2,7 @@
 CLAUDE.pilot-sample.md
 __pycache__/
 .pytest_cache/
+# установленный кит и рабочий клон как проект: локальные пути не публикуются
+.venv/
+.kimi-code/
+.mcp.json
