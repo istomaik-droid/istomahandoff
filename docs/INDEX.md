@@ -15,7 +15,7 @@
 | docs/06 | R | Positioning и measurement — позиционирование, измерение результата |
 | docs/07 | R | Connectivity, legal, privacy, security — связность, право, приватность |
 | docs/08 | R | Delivery sequence и architecture readiness — порядок доставки, готовность архитектуры |
-| docs/09 | M | Active state — текущее состояние протокола, enum состояний |
+| docs/09 | M | Active state — шаблон состояния экземпляра (заполняется в проекте), enum состояний |
 | docs/10 | M | Decision log — журнал решений DEC, формат записи |
 | docs/11 | M | Handoff memo — формат мемо передачи |
 | docs/12 | R | Risk classes — классы риска R0–R5 |

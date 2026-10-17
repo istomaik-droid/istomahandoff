@@ -1,14 +1,26 @@
 # Agent runtimes: как подключить протокол
 
-Канон — файлы в этом репозитории: `agents/`, `skills/`, `docs/`, `templates/`.
-Каждый рантайм получает (1) главный файл инструкций и (2) скиллы — по своему
-механизму. Содержимое одинаковое, различается только размещение.
+Канон — файлы установленного кита (отдельный клон этого репозитория):
+`agents/`, `skills/`, `docs/`, `templates/`; в проекты он не копируется
+(«Размещение»). Каждый рантайм получает (1) главный файл инструкций и
+(2) скиллы — по своему механизму. Содержимое одинаковое, различается только
+размещение.
 
 ## Главный файл инструкций (минимум, одинаков для всех)
 
 ```text
-Этот проект работает по протоколу istomahandoff (docs/, agents/).
+Этот проект работает по протоколу istomahandoff.
 Главное правило: НЕТ ЯВНОГО РЕШЕНИЯ ВЛАДЕЛЬЦА = НЕТ ПРАВА НА ДЕЙСТВИЕ.
+Канон — установленный кит, только чтение: MCP-ресурсы protocol://… или
+tool read_canon (istomahandoff.md, docs/NN, agents/, skills/, templates/).
+Кит на диске — <путь к киту>: он вне workspace, его файлы читают, только
+если это разрешено решением о подключении проекта.
+Экземпляр — этот проект: docs/09, docs/10, docs/11, evidence/,
+templates/PROJECT_PROFILE.yaml читаются из проекта (read_canon и
+protocol:// отдают для этих путей шаблоны кита).
+До первого чтения состояния и первой записи через MCP вызови
+protocol_version: поле project должно совпасть с корнем этого проекта,
+иначе — стоп и вопрос владельцу.
 Перед работой прочитай agents/AGENT_CONTRACT.md и выполни обязательный
 первый ответ. Действия: skills/preflight, decision, handoff, incident,
 verify — по ситуации (whenToUse в каждом SKILL.md).
@@ -17,36 +29,38 @@ verify — по ситуации (whenToUse в каждом SKILL.md).
 ## Kimi Code
 
 - Главный файл: `AGENTS.md` в корне проекта — вставить блок выше.
-- Скиллы (project scope): скопировать `skills/*` в `.kimi-code/skills/`
-  проекта. Общие для всех проектов — в `~/.kimi-code/skills/` (user scope).
+- Скиллы: копия `skills/*` кита в `~/.kimi-code/skills/` (user scope),
+  обновляется вместе с китом; проектные копии не заводятся.
 - Вызов: Skill `preflight`, `decision`, `handoff`, `incident`, `verify`.
 
 ## Claude Code
 
 - Главный файл: `CLAUDE.md` в корне проекта — вставить блок выше.
-- Скиллы: скопировать `skills/*` в `.claude/skills/` проекта
-  (формат SKILL.md + frontmatter совместим). Либо оформить как plugin
-  для установки во все проекты.
+- Скиллы: prompts сервера (`/mcp__istomahandoff__<имя>`); без сервера —
+  копия `skills/*` кита в `~/.claude/skills/` (user scope), обновляется
+  вместе с китом.
 - Вызов: `/preflight`, `/decision`, `/handoff`, `/incident`, `/verify`.
 
 ## Codex / GPT
 
 - Главный файл: `AGENTS.md` в корне проекта — вставить блок выше.
-- Механизма скиллов нет: тела `skills/*/SKILL.md` включаются в AGENTS.md
-  как разделы «При <условие из whenToUse> — выполни:» со ссылкой на файл
-  или с inline-копией процедуры.
+- Механизма скиллов нет: процедура читается из кита —
+  `read_canon("skills/<имя>/SKILL.md")` по условию из whenToUse; без MCP —
+  раздел AGENTS.md «При <условие из whenToUse> — выполни:» со ссылкой на
+  SKILL.md кита или с inline-копией, которая обновляется при каждом
+  обновлении кита.
 - Вызов: по имени процедуры в тексте («выполни preflight»).
 
 ## Cursor
 
 - Главный файл: правило `.cursor/rules/istomahandoff.mdc` с блоком выше.
-- Скиллы: механизма нет — как у Codex, процедуры inline в правило.
-- MCP поддерживается: сервер подключается штатно (см. ниже).
+- Скиллы: механизма нет — как у Codex.
+- MCP поддерживается: проектный `.cursor/mcp.json` («Подключение»).
 
 ## Gemini CLI
 
 - Главный файл: `GEMINI.md` в корне проекта — вставить блок выше.
-- Скиллы: как у Codex — inline в GEMINI.md.
+- Скиллы: как у Codex (read_canon или раздел в GEMINI.md).
 
 ## Адаптация под возможности модели
 
@@ -58,61 +72,110 @@ verify — по ситуации (whenToUse в каждом SKILL.md).
 ## MCP-сервер
 
 MCP-сервер — предпочтительный способ, скиллы-копии — fallback.
-Сервер (`mcp_server/server.py`, stdio) отдаёт канон docs/ и agents/ как
-resources, процедуры skills/ как prompts и добавляет tools (protocol_lint,
-record_decision, validate_transition и др. — см. `mcp_server/README.md`).
-Нормы в коде не дублируются: сервер читает файлы репозитория.
+Сервер (`<кит>/mcp_server/server.py`, stdio) отдаёт канон docs/ и agents/
+как resources, процедуры skills/ как prompts и добавляет tools
+(protocol_lint, record_decision, validate_transition, read_canon и др. —
+см. `mcp_server/README.md`). Нормы в коде не дублируются: сервер читает
+файлы кита.
 
 ### Размещение
 
-Сервер обслуживает корень `ISTOMAHANDOFF_ROOT`, а без неё — родитель
-каталога `mcp_server/` (не `cwd`): читает docs/ этого корня, пишет в его
-docs/10 и выполняет git-операции в его репозитории. Поэтому:
+Два корня (`adr/ADR-0001-kit-instance.md`, DEC-0018).
 
-- Governance самого протокола: сервер подключается проектным конфигом
-  в репозитории протокола (`.kimi-code/mcp.json` или `.mcp.json` в его
-  корне). Пользовательский конфиг (`~/.kimi-code/mcp.json`) открывает
-  сервер во всех проектах — решения любого проекта попадут в журнал
-  протокола, а git-tools и tools состояния (pre_deploy_check,
-  get_active_state, list_expired, audit_sample, evidence_hash) будут
-  отвечать про клон протокола, а не про текущий проект. Если сервер на
-  пользовательском уровне нужен для чтения канона, в записи сервера
-  оставляется только он: `"enabledTools": ["protocol_lint",
-  "validate_transition", "protocol_version"]` (resources и prompts
-  остаются).
-- Инстанс в боевом проекте: `mcp_server/` копируется вместе с остальными
-  файлами протокола, конфиг — проектный (`.kimi-code/mcp.json` в корне
-  проекта, `cwd` — корень проекта). Проектный конфиг перекрывает
-  пользовательский по имени сервера.
-- Альтернатива копированию: один установленный сервер + переменная
-  `ISTOMAHANDOFF_ROOT` в `env` конфига, указывающая на проект; в проекте
-  при этом должны лежать файлы канона, которые читает сервер (docs/,
-  agents/, skills/, templates/, tools/).
+- Канон — установленный кит: отдельный чистый клон этого репозитория на
+  машине. Он меняется только `git pull --ff-only` слитого master с зелёным
+  CI, сервер запускается из его `.venv` (`pip install -r
+  mcp_server/requirements.txt`) и кит только читает. Откат — checkout
+  предыдущего тега `kit-vX.Y`, пока экземпляры не мигрировали на новую
+  версию; после миграции — исправление вперёд новой версией (понижение
+  версии запрещено, docs/47 п.7).
+- Экземпляр — проект: абсолютный путь в `ISTOMAHANDOFF_PROJECT` (env
+  проектного конфига сервера). Файлы экземпляра лежат в проекте на прежних
+  путях — docs/09, docs/10 (свой блок «## Записи»), docs/11, evidence/,
+  templates/PROJECT_PROFILE.yaml — и создаются
+  `python <кит>/tools/instance_init.py <проект>`.
+- `ISTOMAHANDOFF_PROJECT` — единственный ключ записи: он появляется в
+  конфиге проекта по решению владельца о подключении проекта; то же решение
+  фиксирует право читать файлы кита вне workspace (agents/AGENT_CONTRACT).
+  `CLAUDE_PROJECT_DIR` от Claude Code — только чтение и сверка: заданы оба
+  и расходятся — отказ (передаёт ли Claude Code её stdio-серверу, в
+  рантайме не проверено — ADR-0001, Non-claims). С `ISTOMAHANDOFF_ROOT`
+  сервер не стартует.
+- Fail-closed: без проекта, с проектом-китом или каталогом внутри кита,
+  без docs/10 в проекте tools экземпляра (record_decision,
+  checkpoint_create, pre_deploy_check, get_active_state, list_expired,
+  audit_sample, evidence_hash) отказывают; канон (resources, prompts,
+  validate_transition, protocol_version, read_canon, lint кита) доступен.
+- record_decision и checkpoint_create отказывают также, если канон лежит в
+  корне проекта или его git-репозитория (клон протокола или проект с копией
+  кита), кит — не отдельный git-клон, кит изменён на месте (в том числе при
+  старте сервера) или обновлён после старта (нужен перезапуск сессии),
+  вызов пришёл по HTTP.
+- Рабочий клон протокола — обычный проект для установленного кита: чтение и
+  pre_deploy_check работают, запись решений и checkpoint_create через MCP
+  закрыты; журнал протокола ведётся вручную через pull request (DEC-0016
+  протокола); особенности клона — в его AGENTS.md.
+- Ответы tools экземпляра (кроме текстового get_active_state) и
+  protocol_version содержат `project`, git-tools — ещё и `repo`,
+  protocol_lint — `root`; корень проекта сверяют через protocol_version до
+  первой записи (главный файл).
+- Версии: annotated-теги `kit-vX.Y` на строки docs/42. Minor мигрирует по
+  docs/47 п.5 (порядок — docs/34 п.12); major — только решение MIGRATION
+  владельца. In-flight work item, который остаётся на старой версии,
+  получает отдельный worktree кита на её теге — до `git pull` новой major
+  (сервер этого worktree — в конфиге проекта).
 - Авто commit+push журнала (`ISTOMAHANDOFF_AUTOSYNC=1`) включается только
   у единственного писателя docs/10; без неё запись остаётся в рабочем
   дереве (mcp_server/README.md).
 
 ### Подключение
 
-- Kimi Code: `.kimi-code/mcp.json` (проект) по образцу
-  `.mcp.json.example`, заменив `cwd` на корень проекта (в образце — путь
-  к репозиторию протокола); `~/.kimi-code/mcp.json` (пользователь) —
-  только с `enabledTools` (см. «Размещение»); проверка — `/mcp`.
-- Claude Code: `.mcp.json` в корне проекта, либо
-  `claude mcp add istomahandoff -- python mcp_server/server.py`.
-- Codex: секция `mcp_servers` в `config.toml` с той же командой запуска.
-  HTTP-транспорт в Codex моложе stdio: если версия не принимает `url` —
-  локальный stdio-запуск сервера из клона (VPS не нужен).
+- Kimi Code: проектный `.kimi-code/mcp.json` по образцу
+  `.mcp.json.example` — python из `.venv` кита, `<кит>/mcp_server/server.py`
+  и `env.ISTOMAHANDOFF_PROJECT`. Пользовательский `~/.kimi-code/mcp.json` —
+  тот же сервер без `ISTOMAHANDOFF_PROJECT` и только чтение канона:
+  `"enabledTools": ["protocol_lint", "validate_transition",
+  "protocol_version", "read_canon"]`. Перекрывает ли проектный конфиг
+  пользовательский по имени сервера, в рантайме не проверено (ADR-0001,
+  Non-claims): проверка — `/mcp` и поле `project` ответа `protocol_version`.
+- Claude Code: проектный `.mcp.json` с тем же `env`; в user scope — сервер
+  без `ISTOMAHANDOFF_PROJECT`, только чтение (запись по
+  `CLAUDE_PROJECT_DIR` сервер не даёт).
+- Codex: секция `mcp_servers` в `config.toml`; `ISTOMAHANDOFF_PROJECT` —
+  только в конфиге этого проекта (поддерживает ли версия Codex проектный
+  конфиг, не проверено); в пользовательском `~/.codex/config.toml` — сервер
+  без неё, только чтение канона. HTTP-транспорт в Codex моложе stdio: если
+  версия не принимает `url` — локальный stdio-запуск сервера кита (VPS не
+  нужен).
+- Cursor: проектный `.cursor/mcp.json` с тем же `env`; глобальный
+  `~/.cursor/mcp.json` — без `ISTOMAHANDOFF_PROJECT`.
+- Ключ записи — только в конфиге проекта: пользовательский или глобальный
+  конфиг с `ISTOMAHANDOFF_PROJECT` направил бы решения всех проектов в
+  один журнал, а рантаймы без `CLAUDE_PROJECT_DIR` сервер не сверяет.
+- В `.mcp.json.example` путь к python — для Windows; на Linux и macOS —
+  `<кит>/.venv/bin/python`.
 
 Enforcement сервера — только для добросовестного пути (E1–E2, docs/44).
 
 ## Правила инстанцирования
 
-1. Файлы копируются, не перемещаются: канон остаётся в репозитории протокола.
-2. Расхождение копии с каноном — канон прав; копия обновляется при смене
-   версии протокола (docs/42, docs/47).
-3. Проектная конкретика (verify_command, staging, журнал) — только через
-   `templates/PROJECT_PROFILE.yaml`, не правкой скопированных скиллов.
-4. Если рантайм не поддерживает ни скиллы, ни главный файл — протокол
+1. Канон в проект не копируется; экземпляр создаёт
+   `python <кит>/tools/instance_init.py <проект>` — без записей журнала
+   кита, protocol.version — версия кита (docs/42); существующие файлы не
+   перезаписываются.
+2. Порядок подключения: решение владельца о подключении проекта →
+   instance_init → это решение — первой записью журнала проекта, вручную
+   (ключа записи у сервера ещё нет) → `env.ISTOMAHANDOFF_PROJECT` в
+   проектном конфиге → перезапуск сессии и сверка `project` через
+   protocol_version.
+3. Версия экземпляра — protocol.version в docs/09 проекта; после
+   обновления кита расхождение показывает `protocol_version`, порядок —
+   docs/34 п.12 и docs/47.
+4. Проектная конкретика (verify_command, staging, журнал) — только через
+   templates/PROJECT_PROFILE.yaml проекта, не правкой скиллов.
+5. Проверка экземпляра — `python <кит>/tools/protocol_lint.py --project
+   <проект>` (или tool protocol_lint): журнал, docs/09, копии кита в
+   проекте, импорт записей журнала протокола.
+6. Если рантайм не поддерживает ни скиллы, ни главный файл — протокол
    работает как E0-конвенция: агент обязан прочитать agents/ сам,
    enforcement отсутствует (docs/44).

@@ -4,7 +4,7 @@
 
 ```yaml
 protocol:
-  version: "2.0"          # версия протокола; правила миграции — docs/47
+  version: "<SEMVER>"     # версия кита, по которой работает экземпляр; миграция — docs/47
   level: P0 | P1 | P2     # назначается в TRIAGE; docs/45
   enforcement: E0 | E1 | E2 | E3   # уровень среды; docs/44
 
@@ -47,7 +47,9 @@ environments:
 
 ## Правила
 
-Обновляется только после recorded owner decision. Исключение: повышение protocol.level агентом при скрытом риске — с фиксацией в handoff memo (docs/45).
+Обновляется только после recorded owner decision. Исключения — с фиксацией в handoff memo: повышение protocol.level агентом при скрытом риске (docs/45); minor-миграция protocol.version по docs/47 п.5 (docs/34 п.12).
+
+Шаблон этого файла — docs/09 кита; в проекте файл создаёт tools/instance_init.py кита (protocol.version — версия кита на момент создания).
 
 Alias byte-for-byte соответствует последнему snapshot.
 

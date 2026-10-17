@@ -1,41 +1,87 @@
 # MCP-сервер протокола istomahandoff
 
-MCP-сервер (stdio) поверх канона протокола: нормы в коде не дублируются,
-сервер читает `docs/`, `agents/`, `skills/` из репозитория.
+MCP-сервер (stdio) поверх канона протокола: нормы в коде не дублируются.
+Два корня (DEC-0018, `adr/ADR-0001-kit-instance.md`): канон — кит, в котором
+лежит сервер (`docs/`, `agents/`, `skills/`, `templates/`, только чтение);
+экземпляр — проект из `ISTOMAHANDOFF_PROJECT` (docs/09, docs/10, docs/11,
+evidence/ и его git-репозиторий).
 
 ## Что даёт
 
-- Resources: `protocol://docs/<NN_NAME>` — документы docs/,
-  `protocol://agents/<NAME>` — инструкции agents/.
+- Resources: `protocol://docs/<NN_NAME>` и `protocol://docs/INDEX` —
+  документы docs/ (docs/10 — схема и правила без записей кита),
+  `protocol://agents/<NAME>`, `protocol://templates/<NAME>`,
+  `protocol://istomahandoff`.
 - Prompts: 5 процедур из skills/ (preflight, decision, handoff, incident,
   verify) — тела SKILL.md как prompt messages.
-- Tools: `protocol_lint`, `record_decision`, `get_active_state`,
-  `evidence_hash`, `validate_transition` (парсит docs/16),
-  `list_expired`, `audit_sample` (docs/46), `protocol_version` (docs/42),
-  `checkpoint_create` (git tag с readback, docs/19), `pre_deploy_check`
-  (гейт чистого дерева, docs/38).
+- Tools канона (работают и без проекта): `read_canon` (те же файлы, а
+  также `adr/ADR-NNNN-*.md`, этот README и `.mcp.json.example` — по белому
+  списку, для рантаймов, которые не показывают resources),
+  `validate_transition` (парсит docs/16), `protocol_version` (docs/42 и
+  ревизия кита), `protocol_lint` (кит или экземпляр).
+- Tools экземпляра: `record_decision`, `checkpoint_create` (git tag с
+  readback, docs/19), `pre_deploy_check` (гейт чистого дерева, docs/38),
+  `get_active_state`, `evidence_hash`, `list_expired`, `audit_sample`
+  (docs/46).
 
 ## Запуск
 
 ```bash
-pip install -r mcp_server/requirements.txt
-python mcp_server/server.py   # stdio-транспорт (локальный агент)
+pip install -r mcp_server/requirements.txt   # в .venv кита
+ISTOMAHANDOFF_PROJECT=<абсолютный путь к проекту> python <кит>/mcp_server/server.py
 
 # HTTP-режим (VPS, DEC-0009/DEC-0010): только loopback, доступ — SSH-туннель
-MCP_TRANSPORT=http MCP_HOST=127.0.0.1 MCP_PORT=8000 python mcp_server/server.py
+MCP_TRANSPORT=http MCP_HOST=127.0.0.1 MCP_PORT=8000 python <кит>/mcp_server/server.py
 ssh -L 8000:127.0.0.1:8000 <vps>   # с машины владельца
 ```
 
 Подключение к рантаймам — см. `.mcp.json.example` и раздел «MCP-сервер»
-в `agents/AGENT_RUNTIMES.md`. Корень репозитория — родитель `mcp_server/`
-либо переменная окружения `ISTOMAHANDOFF_ROOT` (один сервер может
-обслуживать другой проект без копирования). HTTP-режим — только на
-loopback, публичный биндинг запрещён (DEC-0009, DEC-0010); при другом
-MCP_HOST SDK не включает защиту от DNS rebinding.
+в `agents/AGENT_RUNTIMES.md`. HTTP-режим — только на loopback, публичный
+биндинг запрещён (DEC-0009, DEC-0010); при другом MCP_HOST SDK не включает
+защиту от DNS rebinding.
+
+## Два корня и охрана записи (DEC-0018)
+
+- Канон — родитель `mcp_server/`; проект — абсолютный путь из
+  `ISTOMAHANDOFF_PROJECT`, единственного ключа записи. `CLAUDE_PROJECT_DIR`
+  от Claude Code даёт только чтение и сверку: заданы оба и указывают в
+  разные каталоги — отказ (передаёт ли Claude Code её stdio-серверу, в
+  рантайме не проверено — ADR-0001, Non-claims). `ISTOMAHANDOFF_ROOT` не
+  поддерживается: с ней сервер не стартует. Корень проекта проверяется при
+  старте: после исправления env или каталога нужен перезапуск сессии.
+- Fail-closed: без проекта, с проектом-китом или каталогом внутри кита
+  (сравнение по идентичности каталогов — префикс `\\?\` и UNC-алиасы не
+  обходят), без docs/10 в проекте (подсказка — `tools/instance_init.py`)
+  или с docs/09, docs/10 проекта, ведущими в кит по ссылке, tools
+  экземпляра отказывают; tools канона, resources и prompts доступны.
+- `record_decision` и `checkpoint_create` отказывают также, если канон
+  (`istomahandoff.md` и docs/16) лежит в корне проекта или его
+  git-репозитория (клон протокола или проект с копией кита); кит — не
+  отдельный git-клон (или git недоступен); кит был изменён на месте при
+  старте сервера (загружен код не из HEAD); у отслеживаемых файлов кита
+  есть незакоммиченные изменения; HEAD кита сменился после старта (нужен
+  перезапуск сессии); вызов пришёл по HTTP — по `MCP_TRANSPORT=http` или
+  по самому запросу (SSE, streamable-http при любом способе запуска).
+  Git-проверки кита его не меняют (`--no-optional-locks`); переменные
+  `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` и подобные из окружения
+  рантайма git-tools не наследуют.
+- Enum типов решений — из схемы docs/10 кита (до «## Записи»); копия схемы
+  в журнале проекта не читается. Записи журнала кита наружу не отдаются.
+- `protocol_version` — версия кита (последняя строка docs/42), ревизия кита
+  (`loadedHead` и `loadedDirty` — код, загруженный сервером, `canonHead` и
+  `canonDirty` — на диске, `canonTag` — релизный тег `kit-vX.Y`) и
+  `protocol.version` из docs/09 проекта (`projectVersion`, `match`,
+  `versionsSince`) — факты для docs/34 п.12; поле `project` — корень,
+  который агент сверяет со своим до первой записи.
+- `protocol_lint` исполняет lint кита: с проектом — `--project` (журнал и
+  docs/09 проекта по схеме кита, копии кита в проекте, импорт записей
+  журнала протокола); без проекта или при неверном проекте — lint самого
+  кита (`target: canon`, ошибка проекта — в `projectError`); копия lint в
+  проекте не исполняется.
 
 ## Запись решений (DEC-0011, DEC-0016)
 
-`record_decision` дописывает запись в docs/10 корня сервера. Отклоняются:
+`record_decision` дописывает запись в docs/10 проекта. Отклоняются:
 переводы строк, управляющие и невидимые символы форматирования в полях
 (иначе в журнал дописалась бы поддельная запись или скрытый текст); пустые
 по смыслу значения (пробелы, `null`, `[]`); evidenceReadHash не в формате
@@ -59,10 +105,11 @@ docs/10; любое другое значение owner считается deput
   `PUSH_FAILED`. При `FETCH_FAILED` номер не сверен с upstream — возможен
   дубль DEC-ID (рецепт — в `note` ответа).
 
-Инстанс, где авто-синхронизация работала по DEC-0011 (VPS, DEC-0012),
-после обновления до этой версии перестаёт коммитить, пока в его юнит не
-добавлен `Environment=ISTOMAHANDOFF_AUTOSYNC=1`; добавлять — только по
-решению, которое назначает его единственным писателем.
+Инстанс на VPS (DEC-0012) работает в HTTP-режиме из клона, в котором
+лежит и его журнал. С версии 2.15 запись в HTTP-режиме закрыта при любом
+`ISTOMAHANDOFF_AUTOSYNC`, а журнал внутри кита — не проект: tools
+экземпляра там откажут. Обновление VPS — отдельное решение (ADR-0001,
+Non-claims).
 
 `record_decision` и `checkpoint_create` помечены
 `_meta["anthropic/requiresUserInteraction"]`: интерактивный Claude Code
@@ -98,20 +145,27 @@ dontAsk и через `--permission-prompt-tool` вызов отклоняетс
 
 - Сервер работает с правами агента, который его вызывает; отдельной
   изоляции нет. В HTTP-режиме аутентификации нет: любой локальный процесс
-  хоста может вызвать tools.
+  хоста может вызвать tools (запись в нём закрыта, чтение — нет).
 - Enforcement — только для добросовестного пути (E1–E2 по docs/44):
   сервер напоминает, валидирует и отказывает на уровне своих tools,
   но adversarial-агент может просто не вызывать его или править файлы
   напрямую. Это не защита от adversarial (docs/44).
 - `record_decision` пишет только в docs/10 и только append; поле
   receiptSha256 сервер не вычисляет (null).
-- Git-tools работают в репозитории корня сервера, а не в репозитории
-  агента; ответ содержит `repo` — его нужно сверять со своим корнем.
+- Git-tools работают в репозитории проекта из `ISTOMAHANDOFF_PROJECT`, а
+  не в репозитории агента. Ответы tools экземпляра (кроме текстового
+  `get_active_state`) и `protocol_version` содержат `project`, git-tools —
+  ещё и `repo`; их нужно сверять со своим корнем, до первой записи — через
+  `protocol_version`. Ошибочный путь в env сервер ловит только в случаях
+  охраны записи (канон в проекте, кит).
+- Сервер держит загруженный код до перезапуска: после `git pull` кита
+  запись отказывает, пока сессия рантайма не перезапущена.
 - Флаг requiresUserInteraction — не доказательство участия владельца:
   сервер не получает подтверждения, что запрос видел человек.
 - Таймаут есть только у сетевых git-операций (fetch, push); на Windows он
   не обрывает дочерние процессы git, и вызов может длиться дольше.
 - Файлы с флагами skip-worktree и assume-unchanged `git status` не
   показывает — их правки гейты не видят.
-- State machine и enum типов решений парсятся из docs/16 и docs/10 при
-  каждом вызове; при смене формата этих файлов парсер нужно пересмотреть.
+- State machine и enum типов решений парсятся из docs/16 и docs/10 кита
+  при каждом вызове; при смене формата этих файлов парсер нужно
+  пересмотреть.

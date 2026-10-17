@@ -16,6 +16,9 @@ External agent называет прочитанную версию.
 Изменение версии протокола НЕ мигрирует in-flight work items
 автоматически, кроме minor-миграции по правилам docs/47.
 
+Каждая новая строка change record — annotated-тег `kit-vX.Y` на коммит
+master, в котором она появилась; push тега — по решению владельца.
+
 ## Change record
 
 | Версия | Дата | Изменение |
@@ -36,3 +39,4 @@ External agent называет прочитанную версию.
 | 2.12 | 2026-10-01 | Индекс документов (DEC-0015): docs/INDEX.md — оглавление с тирами must-read/reference; docs/48 — чтение по требованию, ссылка вместо пересказа, одно правило — один документ; антипаттерны 20–22; lint проверяет покрытие INDEX |
 | 2.13 | 2026-10-16 | Безопасная запись решений (DEC-0016): авто commit+push docs/10 только по ISTOMAHANDOFF_AUTOSYNC=1 у единственного писателя — с отказом при отсоединённом HEAD, чужих правках docs/10 и отставании от upstream, проверкой состава коммита, push без чужих коммитов и откатом записи при сбое коммита; строгая проверка полей record_decision; requiresUserInteraction у record_decision и checkpoint_create; repo в ответах git-tools; pytest в CI, mcp закреплён; AGENT_RUNTIMES: корень сервера, пользовательский конфиг только с enabledTools чтения канона; AGENTS.md протокола |
 | 2.14 | 2026-10-17 | Честные гейты (DEC-0017): pre_deploy_check по git status -z (кириллица, пробелы, новые каталоги, переименования), own_files относительно корня репозитория; checkpoint_create — отказ при незакоммиченных отслеживаемых файлах, annotated tag; validate_transition — CONDITIONAL для условного запрета на шаге цепочки (forbiddenWhen) и для аварийных переходов с обобщённым источником (requiresState), прыжок через стадии и остальные запреты docs/16 — FORBIDDEN; protocol_lint — инварианты записей docs/10; .gitattributes evidence/** -text, норма хэша evidence в docs/31, skills/verify ссылается на неё |
+| 2.15 | 2026-10-17 | Кит и экземпляр (DEC-0018, ADR-0001): сервер с двумя корнями — канон из кита сервера (только чтение), проект — ISTOMAHANDOFF_PROJECT (единственный ключ записи), CLAUDE_PROJECT_DIR — только чтение и сверка, ISTOMAHANDOFF_ROOT снят; tools экземпляра fail-closed; запись закрыта, если в корне проекта лежит канон, кит не отдельный клон, изменён или обновлён после старта, а также в HTTP-режиме; enum типов — из схемы кита, docs/10 наружу — без записей кита; read_canon; protocol_version — версия проекта и ревизия кита; protocol_lint --project с детектором импорта записей протокола; tools/instance_init.py; minor-миграция по docs/47 п.5 в docs/34 п.12, docs/47 п.4 и docs/09; AGENT_RUNTIMES — установленный кит и подключение проектов |

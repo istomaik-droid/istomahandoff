@@ -465,6 +465,71 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0018
+  date: 2026-10-17
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: mcp_server/server.py, mcp_server/README.md, tools/protocol_lint.py,
+    tools/instance_init.py, tests/, agents/AGENT_RUNTIMES.md, README.md,
+    AGENTS.md, .mcp.json.example, .gitignore, docs/09, docs/11, docs/33,
+    docs/34, docs/47, docs/INDEX.md, docs/42, templates/PROJECT_PROFILE.yaml,
+    adr/ADR-0001-kit-instance.md, docs/10 (эта запись), теги kit-vX.Y
+  decision: Владелец принял ADR-0001 «кит ↔ экземпляр» (подход «два
+    корня») и пакет П1 по нему. Канон — кит, в котором лежит сервер (только
+    чтение); проект — абсолютный путь из ISTOMAHANDOFF_PROJECT, единственного
+    ключа записи; CLAUDE_PROJECT_DIR — только чтение и сверка; с
+    ISTOMAHANDOFF_ROOT сервер не стартует. Tools экземпляра без проекта, с
+    проектом-китом или внутри кита (сравнение по идентичности каталогов),
+    без docs/10 проекта или с docs/09, docs/10, ведущими в кит по ссылке,
+    отказывают (fail-closed); канон доступен всегда.
+    record_decision и checkpoint_create отказывают также, если канон лежит в
+    корне проекта или его git-репозитория, кит не отдельный git-клон (без
+    git запись закрыта), был изменён на месте при старте, изменён или
+    обновлён после старта сервера, и при вызове по HTTP. Enum типов — из
+    схемы docs/10 кита; docs/10 наружу (ресурс, read_canon) — без записей
+    кита. Новое: tool read_canon; protocol_version — версия проекта и
+    ревизия кита; protocol_lint --project с детектором импорта записей
+    протокола; tools/instance_init.py. Minor-миграция по docs/47 п.5
+    выровнена в docs/33 п.29, docs/34 п.12 (единственное исключение из п.1),
+    docs/47 п.4 и docs/09; в docs/11 — событие PROTOCOL_MIGRATED; шаблоны
+    docs/09 и PROJECT_PROFILE — protocol.version "<SEMVER>"; правило тегов
+    kit-vX.Y — в docs/42. AGENT_RUNTIMES — установленный кит, подключение
+    проектов, ключ записи только в проектном конфиге. Annotated-теги
+    kit-vX.Y на коммиты, добавившие строку версии в docs/42: kit-v2.4
+    (43c119f), kit-v2.5 (4e7bf4d),
+    kit-v2.6 (ca74278), kit-v2.7 (18c3ea1), kit-v2.8 (8958022), kit-v2.9
+    (69d53cd), kit-v2.10 (f0c85ca), kit-v2.11 (c9658be), kit-v2.12
+    (966cf80), kit-v2.13 (5ad31fe), kit-v2.14 (d4c777c), kit-v2.15 — коммит
+    master со строкой 2.15 после слияния; у 1.0–2.3 коммитов в истории нет —
+    без тегов. Класс риска R3 (смешанный scope R2–R3 — по высшему, docs/12
+    п.5); фактический enforcement — E0 плюс pytest и protocol_lint в CI и
+    просмотр диффа владельцем в pull request; работа ниже требуемого для R3
+    уровня E1 принята владельцем (docs/44 п.4).
+  allowed:
+    - правки mcp_server/server.py и mcp_server/README.md
+    - режим --project и детектор импорта в tools/protocol_lint.py
+    - новый tools/instance_init.py
+    - tests/ (включая общий conftest.py)
+    - agents/AGENT_RUNTIMES.md, README.md, AGENTS.md, .mcp.json.example, .gitignore
+    - docs/09 (шаблон version, правило миграции), docs/11 (событие PROTOCOL_MIGRATED), docs/33 п.29, docs/34 п.12, docs/47 п.4, строка docs/09 в docs/INDEX.md, правило тегов в docs/42
+    - templates/PROJECT_PROFILE.yaml (шаблон version)
+    - adr/ADR-0001-kit-instance.md со статусом accepted
+    - строка 2.15 в docs/42
+    - ветка, commit, push и pull request в GitHub
+    - annotated-теги kit-v2.4…kit-v2.15 и их push
+  forbidden:
+    - изменение главного правила
+    - изменение state machine (docs/16)
+    - изменение risk classes
+    - изменение формата записей docs/10
+    - установка кита на машине и правка конфигов рантаймов и проектов (П2)
+    - миграция экземпляров (П3 и дальше)
+    - обновление инстанса на VPS
+    - force-push и переписывание истории
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
