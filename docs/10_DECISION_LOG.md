@@ -571,6 +571,32 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0020
+  date: 2026-10-19
+  owner: OWNER
+  type: CORRECTION
+  scope: README.md (раздел «Версия»), описание репозитория и Releases на
+    GitHub, docs/10 (эта запись)
+  decision: Раздел «Версия» README называл 2.0 от 2026-09-14 при фактической
+    версии 2.16, описание репозитория на GitHub — v2.4. Вместо числа в
+    README — ссылка на последнюю строку docs/42 и теги kit-vX.Y, чтобы раздел
+    не устаревал; описание репозитория — без номера версии. На тегах
+    kit-v2.15 и kit-v2.16 созданы Releases с текстом из строк docs/42
+    (kit-v2.16 — последний). Номер версии протокола не меняется: нормы не
+    затронуты, установленный кит остаётся на kit-v2.16.
+  allowed:
+    - раздел «Версия» в README.md
+    - описание репозитория на GitHub
+    - Releases на тегах kit-v2.15 и kit-v2.16
+    - ветка, commit, push и pull request в GitHub
+  forbidden:
+    - изменение норм протокола и строк docs/42
+    - новые теги и перенос существующих
+    - force-push и переписывание истории
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
