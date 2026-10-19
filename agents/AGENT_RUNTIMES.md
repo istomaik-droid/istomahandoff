@@ -97,10 +97,9 @@ MCP-сервер — предпочтительный способ, скиллы
 - `ISTOMAHANDOFF_PROJECT` — единственный ключ записи: он появляется в
   конфиге проекта по решению владельца о подключении проекта; то же решение
   фиксирует право читать файлы кита вне workspace (agents/AGENT_CONTRACT).
-  `CLAUDE_PROJECT_DIR` от Claude Code — только чтение и сверка: заданы оба
-  и расходятся — отказ (передаёт ли Claude Code её stdio-серверу, в
-  рантайме не проверено — ADR-0001, Non-claims). С `ISTOMAHANDOFF_ROOT`
-  сервер не стартует.
+  `CLAUDE_PROJECT_DIR` Claude Code передаёт stdio-серверу (проверено в П2,
+  DEC-0019) — она даёт только чтение и сверку: заданы оба и расходятся —
+  отказ. С `ISTOMAHANDOFF_ROOT` сервер не стартует.
 - Fail-closed: без проекта, с проектом-китом или каталогом внутри кита,
   без docs/10 в проекте tools экземпляра (record_decision,
   checkpoint_create, pre_deploy_check, get_active_state, list_expired,
@@ -130,16 +129,29 @@ MCP-сервер — предпочтительный способ, скиллы
 
 ### Подключение
 
-- Kimi Code: проектный `.kimi-code/mcp.json` по образцу
+- Проектный `.mcp.json` в корне git-репозитория проекта по образцу
   `.mcp.json.example` — python из `.venv` кита, `<кит>/mcp_server/server.py`
-  и `env.ISTOMAHANDOFF_PROJECT`. Пользовательский `~/.kimi-code/mcp.json` —
+  и `env.ISTOMAHANDOFF_PROJECT` — читают и Claude Code, и Kimi Code: один
+  конфиг на оба рантайма.
+- Kimi Code (расширение 0.8.2, по его коду; DEC-0019) читает три слоя:
+  пользовательский `~/.kimi-code/mcp.json`, `.mcp.json` корня
+  git-репозитория и `.kimi-code/mcp.json` каталога сессии. Поздний слой
+  целиком заменяет запись с тем же именем сервера (поля не сливаются),
+  проектные слои читаются только в доверенном workspace. Поэтому старый
+  `.kimi-code/mcp.json` проекта перекрывает его `.mcp.json`, а проектная
+  запись содержит команду, args и env полностью. Пользовательская запись —
   тот же сервер без `ISTOMAHANDOFF_PROJECT` и только чтение канона:
   `"enabledTools": ["protocol_lint", "validate_transition",
-  "protocol_version", "read_canon"]`. Перекрывает ли проектный конфиг
-  пользовательский по имени сервера, в рантайме не проверено (ADR-0001,
-  Non-claims): проверка — `/mcp` и поле `project` ответа `protocol_version`.
-- Claude Code: проектный `.mcp.json` с тем же `env`; в user scope — сервер
-  без `ISTOMAHANDOFF_PROJECT`, только чтение (запись по
+  "protocol_version", "read_canon"]`. Проверка в сессии — поле `canon`
+  ответа `protocol_version` (путь кита).
+- Claude Code: проектный `.mcp.json` (подтверждается при первом запуске)
+  либо `claude mcp add --scope local istomahandoff --env
+  ISTOMAHANDOFF_PROJECT=<проект> -- <python кита> <кит>/mcp_server/server.py`
+  — запись в `~/.claude.json` под ключом каталога проекта. Ключ
+  чувствителен к регистру буквы диска: сессии из VS Code пишут `c:/…`, из
+  терминала — `C:/…`; запись нужна под тем ключом, откуда запускается
+  сессия (`claude mcp get istomahandoff` в каталоге проекта). В user scope —
+  сервер без `ISTOMAHANDOFF_PROJECT`, только чтение (запись по
   `CLAUDE_PROJECT_DIR` сервер не даёт).
 - Codex: секция `mcp_servers` в `config.toml`; `ISTOMAHANDOFF_PROJECT` —
   только в конфиге этого проекта (поддерживает ли версия Codex проектный
