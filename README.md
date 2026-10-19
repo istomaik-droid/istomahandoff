@@ -71,4 +71,7 @@ scope и allowed/forbidden. Спор о том, было ли решение, т
 
 ## Версия
 
-2.0 от 2026-09-14. История изменений — в docs/42_MAINTENANCE.md.
+Текущая версия — последняя строка change record в docs/42_MAINTENANCE.md;
+на её коммите стоит annotated-тег `kit-vX.Y` (страница Releases на GitHub).
+История изменений — там же. Версию установленного кита и проекта
+показывает tool `protocol_version` MCP-сервера.
