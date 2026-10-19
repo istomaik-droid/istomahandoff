@@ -530,6 +530,47 @@ Append-only.
   receiptSha256: null
   evidenceReadHash: null
   mandateRef: null
+- id: DEC-0019
+  date: 2026-10-19
+  owner: OWNER
+  type: IMPLEMENTATION
+  scope: установка кита на машине владельца (П2 по ADR-0001), пользовательские
+    конфиги MCP рантаймов, agents/AGENT_RUNTIMES.md, mcp_server/README.md,
+    docs/42, docs/10 (эта запись), тег kit-v2.16
+  decision: Владелец утвердил П2 по ADR-0001. Установленный кит — отдельный
+    клон протокола на слитом master со своим .venv. Пользовательский конфиг
+    Kimi Code запускает сервер кита без ключа записи, только чтение канона
+    (enabledTools: protocol_lint, validate_transition, protocol_version,
+    read_canon); копия скилла verify приведена к киту. Рабочий клон
+    протокола подключён к киту в Claude Code как проект (local scope,
+    ISTOMAHANDOFF_PROJECT — этот клон): чтение и pre_deploy_check, запись
+    закрыта охраной сервера; в другие проекты Claude Code сервер не
+    подключается. Проверки рантаймов (слои MCP-конфигов Kimi Code, передача
+    CLAUDE_PROJECT_DIR в Claude Code) и их итоги — в AGENT_RUNTIMES. Прежние
+    конфиги — в бэкапе вне репозитория; откат — бэкап и checkout
+    предыдущего тега кита. Класс риска R2 (обратимые правки
+    пользовательских конфигов, без данных проектов); enforcement — E0 плюс
+    проверки по шагам и CI.
+  allowed:
+    - git pull --ff-only установленного кита и его .venv
+    - пользовательский ~/.kimi-code/mcp.json — сервер кита, только чтение
+    - ~/.kimi-code/skills/verify/SKILL.md — копия из кита
+    - Claude Code — сервер кита в local scope рабочего клона протокола
+    - безголовый прогон Claude Code с временным MCP-конфигом для проверки
+    - бэкап прежних конфигов вне репозитория
+    - agents/AGENT_RUNTIMES.md, mcp_server/README.md, строка 2.16 в docs/42
+    - ветка, commit, push, pull request; тег kit-v2.16 после слияния
+  forbidden:
+    - ключ записи ISTOMAHANDOFF_PROJECT в пользовательских конфигах
+    - изменение файлов и конфигов проектов-экземпляров (П3, П4)
+    - чужие скиллы и серверы в пользовательских каталогах
+    - изменение главного правила, state machine, risk classes, формата docs/10
+    - обновление инстанса на VPS
+    - force-push и переписывание истории
+  expiresAt: null
+  receiptSha256: null
+  evidenceReadHash: null
+  mandateRef: null
 ```
 
 ## Правила
